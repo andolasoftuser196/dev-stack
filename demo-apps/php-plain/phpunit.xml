@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  No <env> block pointing at a database, and that is deliberate. dx forces
+  No <env> block pointing at a database, and that is deliberate. ssmd forces
   DB_DATABASE to a disposable name in the environment before invoking the
   runner, precisely because a phpunit.xml that names the wrong database is how a
   suite ends up truncating the one you were working in.

@@ -1,4 +1,4 @@
-"""One migration, so dx db:migrate has something to do."""
+"""One migration, so ssmd db:migrate has something to do."""
 
 import sqlalchemy as sa
 from alembic import op

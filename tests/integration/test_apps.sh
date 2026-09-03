@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Boot each demo app for real and assert the status contract holds.
 #
-# This is the test that makes `dx up` on a fresh clone a claim rather than a
+# This is the test that makes `ssmd up` on a fresh clone a claim rather than a
 # hope. Every app is booted through its own example config, served through the
 # proxy, and asked the same question.
 #
 # Slow: each runtime builds an image and installs dependencies. Limit it while
 # iterating:
 #
-#     DX_TEST_APPS="go php-plain" tests/run integration/test_apps
+#     SSMD_TEST_APPS="go php-plain" tests/run integration/test_apps
 . "$(dirname "$(readlink -f "$0")")/../lib.sh"
 
 have_docker_daemon || { t_skip "app boot" "no docker daemon"; t_summary; exit; }
@@ -33,18 +33,18 @@ python-django:django:yes:demo_demonote
 python-fastapi:fastapi:yes:demo_notes
 python-flask:flask:yes:"
 
-WANT="${DX_TEST_APPS:-}"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/dxapps.XXXXXX")"
+WANT="${SSMD_TEST_APPS:-}"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/ssmdapps.XXXXXX")"
 cleanup() {
-    [ -d "$WORK/dev-stack" ] && ( cd "$WORK/dev-stack" && DX_YES=1 ./dx down >/dev/null 2>&1 )
-    docker ps -aq --filter 'label=dx.managed=true' | xargs -r docker rm -f >/dev/null 2>&1
+    [ -d "$WORK/dev-stack" ] && ( cd "$WORK/dev-stack" && SSMD_YES=1 ./ssmd down >/dev/null 2>&1 )
+    docker ps -aq --filter 'label=ssmd.managed=true' | xargs -r docker rm -f >/dev/null 2>&1
     docker run --rm -v "$WORK:/w" alpine:3 sh -c 'rm -rf /w/*' >/dev/null 2>&1
     rm -rf "$WORK"
 }
 trap cleanup EXIT
 
 tar -C "$TEST_ROOT" --exclude=./data --exclude=./.git --exclude=./tests \
-    --exclude=./config/dx.db --exclude=./config/dx.db-wal --exclude=./config/dx.db-shm \
+    --exclude=./config/ssmd.db --exclude=./config/ssmd.db-wal --exclude=./config/ssmd.db-shm \
     --exclude=./.stack.env --exclude=__pycache__ --exclude=node_modules --exclude=vendor \
     -cf - . 2>/dev/null | (mkdir -p "$WORK/dev-stack" && tar -C "$WORK/dev-stack" -xf -)
 cd "$WORK/dev-stack"
@@ -63,18 +63,18 @@ apptest:
     database: 127.0.0.1
     cache: 127.0.0.1
 Y
-printf 'DX_HOST=apptest\n' > .env
+printf 'SSMD_HOST=apptest\n' > .env
 
 boot_one() {
     local stem="$1" app="$2" table="${4:-}"
     t_section "$app  (examples/runtimes/$stem.stack.yml)"
 
-    # Tear the previous app down, then make sure. `dx down` is the right thing
+    # Tear the previous app down, then make sure. `ssmd down` is the right thing
     # and it is not enough here: every app reuses one proxy port, so anything it
     # leaves behind makes the NEXT app fail with "port is already allocated" -
     # which reads like a broken app and is nothing of the kind.
-    ( cd "$WORK/dev-stack" && DX_YES=1 ./dx down >/dev/null 2>&1 )
-    docker ps -aq --filter 'label=dx.managed=true' | xargs -r docker rm -f >/dev/null 2>&1
+    ( cd "$WORK/dev-stack" && SSMD_YES=1 ./ssmd down >/dev/null 2>&1 )
+    docker ps -aq --filter 'label=ssmd.managed=true' | xargs -r docker rm -f >/dev/null 2>&1
 
     # And wait for the kernel to actually release it. Docker returns from `rm`
     # before the port is reusable, so a fast loop races it.
@@ -101,26 +101,26 @@ boot_one() {
     fi
     # A distinct stack name per app: the derived port offset follows it, so two
     # runs cannot collide on the database port.
-    sed -e "s|^name: .*|name: dxa${app//-/}|" \
-        -e "s|^domain: .*|domain: dxa${app//-/}.test|" \
+    sed -e "s|^name: .*|name: ssmda${app//-/}|" \
+        -e "s|^domain: .*|domain: ssmda${app//-/}.test|" \
         "examples/runtimes/$stem.stack.yml" > config/stack.yml
-    rm -f .stack.env config/dx.db*
+    rm -f .stack.env config/ssmd.db*
 
-    if ! DX_YES=1 ./dx up core > "$WORK/$app.log" 2>&1; then
-        t_fail "$app: dx up" "$(grep -vE '^#[0-9]+ ' "$WORK/$app.log" | tail -20)
+    if ! SSMD_YES=1 ./ssmd up core > "$WORK/$app.log" 2>&1; then
+        t_fail "$app: ssmd up" "$(grep -vE '^#[0-9]+ ' "$WORK/$app.log" | tail -20)
 "
         return 1
     fi
-    t_ok "$app: dx up"
+    t_ok "$app: ssmd up"
 
     # Dependencies, where the app has any. Separate from `up` because a failure
     # here means "the install broke", not "the stack broke", and conflating them
     # sends people to the wrong place.
     if [ "$3" = yes ]; then
-        if ./dx deps >> "$WORK/$app.log" 2>&1; then t_ok "$app: dx deps"
-        else t_fail "$app: dx deps" "$(tail -15 "$WORK/$app.log")
+        if ./ssmd deps >> "$WORK/$app.log" 2>&1; then t_ok "$app: ssmd deps"
+        else t_fail "$app: ssmd deps" "$(tail -15 "$WORK/$app.log")
 "; return 1; fi
-        ./dx recreate app >/dev/null 2>&1
+        ./ssmd recreate app >/dev/null 2>&1
     fi
 
     # Give the app process time to come up behind Caddy. healthz is Caddy's, so
@@ -128,11 +128,11 @@ boot_one() {
     local body="" i=0
     while [ $i -lt 45 ]; do
         body="$(curl -sS --max-time 10 http://127.0.0.1:18490/ 2>/dev/null)"
-        case "$body" in *"dx demo app"*) break ;; esac
+        case "$body" in *"ssmd demo app"*) break ;; esac
         sleep 2; i=$((i+2))
     done
 
-    if ! printf '%s' "$body" | grep -qF 'dx demo app'; then
+    if ! printf '%s' "$body" | grep -qF 'ssmd demo app'; then
         # A blank page says nothing. The application log says what the process
         # actually did, and without it every one of these failures costs a
         # separate reproduction run.
@@ -143,7 +143,7 @@ $(printf '%s' "$body" | sed -e 's/<[^>]*>/ /g' -e 's/  */ /g' \
     | grep -vE '^\s*$' | head -8 | cut -c1-160 | sed 's/^/  | /')
 
 last 25 lines of the app container:
-$(./dx logs app --tail 25 2>&1 | tail -25 | sed 's/^/  | /')
+$(./ssmd logs app --tail 25 2>&1 | tail -25 | sed 's/^/  | /')
 "
     else
         t_ok "$app: serves the status page"
@@ -174,13 +174,13 @@ $(./dx logs app --tail 25 2>&1 | tail -25 | sed 's/^/  | /')
     # nothing at all, which is exactly the failure this catches.
     if [ -n "$table" ]; then
         local n
-        n="$(./dx db:query "SELECT COUNT(*) FROM information_schema.tables
+        n="$(./ssmd db:query "SELECT COUNT(*) FROM information_schema.tables
                              WHERE table_name = '$table'" 2>/dev/null | tr -cd '0-9')"
         [ "${n:-0}" -ge 1 ] \
             && t_ok "$app: its migration created '$table'" \
             || t_fail "$app: its migration created '$table'" "the table is not there.
 tables present:
-$(./dx db:query 'SELECT table_name FROM information_schema.tables
+$(./ssmd db:query 'SELECT table_name FROM information_schema.tables
                   WHERE table_schema NOT IN (\'information_schema\',\'pg_catalog\',\'mysql\',\'sys\',\'performance_schema\')' 2>&1 | head -10 | sed 's/^/  | /')
 "
     fi
@@ -208,5 +208,5 @@ for row in "${ROWS[@]}"; do
     ran=$((ran+1))
 done
 
-[ "$ran" -gt 0 ] || t_skip "app boot" "DX_TEST_APPS matched nothing"
+[ "$ran" -gt 0 ] || t_skip "app boot" "SSMD_TEST_APPS matched nothing"
 t_summary

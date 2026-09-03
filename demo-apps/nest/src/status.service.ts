@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import * as net from 'node:net';
 
 /**
- * The dx demo status probe.
+ * The ssmd demo status probe.
  *
  * TCP reachability rather than a driver per service: pulling in pg, ioredis and
  * an SMTP client to answer "is it reachable" would make the demo's dependency
@@ -24,9 +24,9 @@ export class StatusService {
   async render(): Promise<string> {
     const env = process.env;
     const lines = [
-      'dx demo app',
-      `runtime=${env.DX_RUNTIME ?? 'node'} framework=nest version=${process.versions.node}`,
-      `instance=${env.DX_INSTANCE ?? 'main'}`,
+      'ssmd demo app',
+      `runtime=${env.SSMD_RUNTIME ?? 'node'} framework=nest version=${process.versions.node}`,
+      `instance=${env.SSMD_INSTANCE ?? 'main'}`,
     ];
 
     lines.push(env.DB_DATABASE

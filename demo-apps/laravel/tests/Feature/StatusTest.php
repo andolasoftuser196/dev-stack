@@ -12,7 +12,7 @@ final class StatusTest extends TestCase
         if ($db === false || $db === '') {
             $this->markTestSkipped('no database configured');
         }
-        // The same guard dx enforces, asserted from inside the project so it is
+        // The same guard ssmd enforces, asserted from inside the project so it is
         // visible to anyone reading the app rather than only the toolkit.
         $this->assertMatchesRegularExpression('/(_test|_sandbox)$/', $db);
     }

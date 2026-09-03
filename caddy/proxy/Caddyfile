@@ -33,7 +33,7 @@
 (upstream) {
 	reverse_proxy {args[0]} {
 		flush_interval -1
-		header_up X-Dx-Instance {args[1]}
+		header_up X-Ssmd-Instance {args[1]}
 	}
 }
 
@@ -77,7 +77,7 @@ http://mcp.{$DEV_DOMAIN}, https://mcp.{$DEV_DOMAIN} {
 	}
 }
 
-# Per-instance routes for `dx wt` and `dx agent`, written into sites/ by
+# Per-instance routes for `ssmd wt` and `ssmd agent`, written into sites/ by
 # lib/worktree.sh and lib/agent.sh and removed on teardown.
 #
 # 00-placeholder.caddy keeps this glob non-empty: an import matching zero files

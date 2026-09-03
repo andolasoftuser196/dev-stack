@@ -26,7 +26,7 @@ jobs:
 
       - name: bash -n
         run: |
-          bash -n dx
+          bash -n ssmd
           bash -n lib/*.sh
           bash -n runtimes/*/commands.sh
           bash -n tests/run tests/lib.sh tests/*/*.sh
@@ -62,7 +62,7 @@ jobs:
 
       - name: no literal service ports
         run: |
-          if grep -rnE '\b(3306|5432|6379|8025|9000)\b' dx lib/*.sh docker-compose*.yml \
+          if grep -rnE '\b(3306|5432|6379|8025|9000)\b' ssmd lib/*.sh docker-compose*.yml \
                | grep -vE '[$][{]|[{][$]|^[^:]+:[0-9]+:[[:space:]]*#'; then
             echo "::error::literal port outside config/ - move it to config/defaults.yml and read it with _cfg"
             exit 1
@@ -76,17 +76,17 @@ jobs:
       # sources of truth that drift.
       - name: no fallback masking a missing config key
         run: |
-          if grep -rnE '[$][{]STACK_[A-Z_]+:-' dx lib/*.sh runtimes/*/commands.sh \
+          if grep -rnE '[$][{]STACK_[A-Z_]+:-' ssmd lib/*.sh runtimes/*/commands.sh \
                | grep -vE 'STACK_HOOKS_[A-Z_]+:-|STACK_REPO_GIT_ROOT:-'; then
             echo "::error::\${STACK_*:-fallback} hides a missing key - add the key to config/defaults.yml instead"
             exit 1
           fi
 
       # data/ holds a CA private key, database files and whatever an agent
-      # downloaded; config/dx.db is a build artifact of the seeds.
+      # downloaded; config/ssmd.db is a build artifact of the seeds.
       - name: nothing that should be gitignored is tracked
         run: |
-          if git ls-files | grep -E '^(data/|config/dx\.db|\.stack\.env$|\.env$)'; then
+          if git ls-files | grep -E '^(data/|config/ssmd\.db|\.stack\.env$|\.env$)'; then
             echo "::error::machine-local state is tracked - see .gitignore"
             exit 1
           fi
@@ -100,7 +100,7 @@ jobs:
       - name: install sqlite3
         run: sudo apt-get update -qq && sudo apt-get install -y -qq sqlite3
 
-      # jinja2 and pyyaml are dx init's dependencies; without them the
+      # jinja2 and pyyaml are ssmd init's dependencies; without them the
       # scaffolder tests skip themselves and CI would pass without running them.
       - name: install the scaffolder's dependencies
         run: python3 -m pip install --quiet -r scaffold/requirements.txt

@@ -1,7 +1,7 @@
 # A Vite SPA with no backend of its own - it talks to an API elsewhere.
 #
-# services.database: none is the point of this example. dx starts no database
-# container at all rather than an idle one, and `dx db` says plainly that this
+# services.database: none is the point of this example. ssmd starts no database
+# container at all rather than an idle one, and `ssmd db` says plainly that this
 # project has none.
 #
 # Vite binds 5173 and must be told --host 0.0.0.0 to be reachable from outside
@@ -11,7 +11,7 @@
 # from a fresh clone:
 #
 #     cp examples/runtimes/node-vite.stack.yml config/stack.yml
-#     dx config import && dx up core && dx urls
+#     ssmd config import && ssmd up core && ssmd urls
 #
 # For a real project, change repo.root and repo.git_root to point at it.
 
@@ -54,7 +54,7 @@ tools:
   mcp: true
 
 hooks:
-  # Dependencies are not listed here. `dx up` installs them through the runtime
+  # Dependencies are not listed here. `ssmd up` installs them through the runtime
   # module, which knows the right command for the package manager in use and
   # what to do when there is no lockfile yet. Put project-specific one-time
   # setup here instead.

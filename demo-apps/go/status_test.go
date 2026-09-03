@@ -6,12 +6,12 @@ import (
 	"strings"
 	"testing"
 
-	"dx/demo/internal/status"
+	"ssmd/demo/internal/status"
 )
 
 func TestRendersTheAgreedShape(t *testing.T) {
 	out := status.Render()
-	if !strings.HasPrefix(out, "dx demo app") {
+	if !strings.HasPrefix(out, "ssmd demo app") {
 		t.Fatalf("unexpected first line: %q", out)
 	}
 	for _, want := range []string{"runtime=", "instance=", "database=", "cache="} {
@@ -21,7 +21,7 @@ func TestRendersTheAgreedShape(t *testing.T) {
 	}
 }
 
-// The same guard dx enforces, asserted from inside the project so it is visible
+// The same guard ssmd enforces, asserted from inside the project so it is visible
 // to anyone reading the app rather than only anyone reading the toolkit.
 func TestRunsAgainstADisposableDatabase(t *testing.T) {
 	db := os.Getenv("DB_DATABASE")

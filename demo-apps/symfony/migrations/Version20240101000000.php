@@ -8,7 +8,7 @@ use Doctrine\DBAL\Schema\Schema;
 use Doctrine\Migrations\AbstractMigration;
 
 /**
- * One migration, so `dx db:migrate` has something to apply and each worktree
+ * One migration, so `ssmd db:migrate` has something to apply and each worktree
  * instance builds a schema in its own database.
  */
 final class Version20240101000000 extends AbstractMigration

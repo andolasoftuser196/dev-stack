@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# dx - the one entry point to this development environment.
+# ssmd - the one entry point to this development environment.
 #
 # Everything goes through here rather than raw `docker compose`, because compose
 # alone does not know the host UID/GID, the profile set implied by stack.yml, the
@@ -9,107 +9,107 @@
 #
 # Layout:
 #   lib/sqlite.sh     the only thing that talks to the config store
-#   lib/config.sh     configuration: layers, resolution, `dx config`
+#   lib/config.sh     configuration: layers, resolution, `ssmd config`
 #   lib/core.sh       bootstrap, compose plumbing, output, audit
 #   lib/db.sh         the APPLICATION database (not the config store)
 #   lib/instance.sh   the worktree/agent instance machinery
-#   lib/worktree.sh   dx wt
-#   lib/agent.sh      dx agent
-#   lib/policy.sh     dx agent diff, and the hooks' command guard
-#   lib/doctor.sh     dx preflight / doctor / verify / status
+#   lib/worktree.sh   ssmd wt
+#   lib/agent.sh      ssmd agent
+#   lib/policy.sh     ssmd agent diff, and the hooks' command guard
+#   lib/doctor.sh     ssmd preflight / doctor / verify / status
 #   runtimes/<kind>/  everything language-specific (see runtimes/_contract.md)
 
 set -euo pipefail
 
-DX_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
-export DX_ROOT
+SSMD_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+export SSMD_ROOT
 
 # Order matters: core defines log/die, sqlite needs them, config needs sqlite.
 for m in core sqlite config; do
     # shellcheck disable=SC1090
-    . "$DX_ROOT/lib/$m.sh"
+    . "$SSMD_ROOT/lib/$m.sh"
 done
 
 require_host_os
 
-# `dx init` has to run before there is a stack.yml to load, so it is handled
+# `ssmd init` has to run before there is a stack.yml to load, so it is handled
 # before load_config and is the only command that may.
 if [ "${1:-}" = "init" ]; then
     shift
-    exec "$DX_ROOT/scaffold/init.sh" "$@"
+    exec "$SSMD_ROOT/scaffold/init.sh" "$@"
 fi
 
 load_config
 load_runtime
 for m in db instance worktree agent policy doctor; do
     # shellcheck disable=SC1090
-    . "$DX_ROOT/lib/$m.sh"
+    . "$SSMD_ROOT/lib/$m.sh"
 done
 
 usage() {
     cat <<EOF
-dx - $(rt_display_name) at https://${STACK_ROUTES_APP}.${STACK_DOMAIN}/
+ssmd - $(rt_display_name) at https://${STACK_ROUTES_APP}.${STACK_DOMAIN}/
 
   Lifecycle
-    dx up [$(preset_names | tr '\n' '|' | sed 's/|$//')]   start the stack (default: $(_cfgd DEFAULT_PRESET default))
-    dx down                          stop everything, keep the data
-    dx nuke                          stop everything and delete the data  (destructive)
-    dx restart | dx recreate <svc>
-    dx build [--no-cache]            rebuild the runtime image
+    ssmd up [$(preset_names | tr '\n' '|' | sed 's/|$//')]   start the stack (default: $(_cfgd DEFAULT_PRESET default))
+    ssmd down                          stop everything, keep the data
+    ssmd nuke                          stop everything and delete the data  (destructive)
+    ssmd restart | ssmd recreate <svc>
+    ssmd build [--no-cache]            rebuild the runtime image
 
   Look at it
-    dx status | dx urls | dx describe
-    dx logs [service] [-f]
-    dx preflight                     will 'dx up' work on this machine?
-    dx doctor                        does reality match what dx thinks?
-    dx verify [instance]             is the app actually working right now?
+    ssmd status | ssmd urls | ssmd describe
+    ssmd logs [service] [-f]
+    ssmd preflight                     will 'ssmd up' work on this machine?
+    ssmd doctor                        does reality match what ssmd thinks?
+    ssmd verify [instance]             is the app actually working right now?
 
   Work in it
-    dx sh [service]                  shell in the app container, as you
-    dx exec <service> <cmd...>
-    dx run <cmd...>                  run in the app container
-    dx deps                          install dependencies (frozen lockfile)
-    dx test [args...]                the suite, pointed at a disposable database
-    dx lint [args...]  |  dx repl
-    dx $(rt_verbs | tr ' ' '\n' | head -4 | tr '\n' ' ')...
+    ssmd sh [service]                  shell in the app container, as you
+    ssmd exec <service> <cmd...>
+    ssmd run <cmd...>                  run in the app container
+    ssmd deps                          install dependencies (frozen lockfile)
+    ssmd test [args...]                the suite, pointed at a disposable database
+    ssmd lint [args...]  |  ssmd repl
+    ssmd $(rt_verbs | tr ' ' '\n' | head -4 | tr '\n' ' ')...
 
   Data
-    dx db                            interactive database shell
-    dx db:query <sql>                one statement, batch output
-    dx db:migrate                    apply the project's migrations
-    dx db:snapshot [name]            snapshot to data/snapshots/
-    dx db:snapshots                  list them
-    dx db:restore <file> [db]        restore (snapshots first, always)
-    dx db:import <file>              load a dump from elsewhere
-    dx db:drop <name>                drop a disposable database
+    ssmd db                            interactive database shell
+    ssmd db:query <sql>                one statement, batch output
+    ssmd db:migrate                    apply the project's migrations
+    ssmd db:snapshot [name]            snapshot to data/snapshots/
+    ssmd db:snapshots                  list them
+    ssmd db:restore <file> [db]        restore (snapshots first, always)
+    ssmd db:import <file>              load a dump from elsewhere
+    ssmd db:drop <name>                drop a disposable database
 
   Several branches at once
-    dx wt add <branch>               a full environment at <slug>.${STACK_DOMAIN}
-    dx wt ls | up | stop | rm | logs | sh | exec | verify
+    ssmd wt add <branch>               a full environment at <slug>.${STACK_DOMAIN}
+    ssmd wt ls | up | stop | rm | logs | sh | exec | verify
 
   Agents
-    dx agent spawn <branch>          an isolated sandbox for a coding agent
-    dx agent ls | attach | run | verify | diff | rm | reap
-    dx agent policy | audit
+    ssmd agent spawn <branch>          an isolated sandbox for a coding agent
+    ssmd agent ls | attach | run | verify | diff | rm | reap
+    ssmd agent policy | audit
 
   Odds and ends
-    dx browse <url>                  open it in the watchable browser
-    dx ca-cert                       trust the stack CA on your workstation
-    dx debug on|off|status           Xdebug
-    dx fix-perms                     repair root-owned files from an older stack
-    dx mcp:install                   register the stack MCP server with Claude Code
-    dx completion bash|zsh
-    dx selftest [--integration]      run the toolkit's own test suite
+    ssmd browse <url>                  open it in the watchable browser
+    ssmd ca-cert                       trust the stack CA on your workstation
+    ssmd debug on|off|status           Xdebug
+    ssmd fix-perms                     repair root-owned files from an older stack
+    ssmd mcp:install                   register the stack MCP server with Claude Code
+    ssmd completion bash|zsh
+    ssmd selftest [--integration]      run the toolkit's own test suite
 
   Configuration
-    dx config list [prefix]          every effective value and its layer
-    dx config get|set|unset <key>    read and change it, now
-    dx config explain <key>          why this value is what it is
-    dx config history [key]          what changed, when, by whom
-    dx config import | export
+    ssmd config list [prefix]          every effective value and its layer
+    ssmd config get|set|unset <key>    read and change it, now
+    ssmd config explain <key>          why this value is what it is
+    ssmd config history [key]          what changed, when, by whom
+    ssmd config import | export
 
   Configuration lives in a SQLite database, seeded from config/*.yml.
-  .env holds bootstrap only: DX_DB, DX_HOST, and secrets.
+  .env holds bootstrap only: SSMD_DB, SSMD_HOST, and secrets.
 EOF
 }
 
@@ -118,7 +118,7 @@ cmd_up() {
     local preset="${1:-$(_cfgd DEFAULT_PRESET default)}"
     local base; base="$(profiles_for_preset "$preset")" \
         || die "unknown preset '$preset'. Valid: $(preset_names | tr '\n' ' ')
-      Add one:  dx config set presets.<name> \"<profiles>\" default"
+      Add one:  ssmd config set presets.<name> \"<profiles>\" default"
 
     ensure_dirs
 
@@ -148,7 +148,7 @@ cmd_up() {
     audit "stack.up" "preset=$preset"
 
     # The proxy generates its CA on first boot. Everything that trusts it - the
-    # app containers, the browser, `dx ca-cert` - needs it to exist, so wait
+    # app containers, the browser, `ssmd ca-cert` - needs it to exist, so wait
     # rather than letting the next twelve things fail one at a time.
     local i=0 ca_wait; ca_wait="$(_cfg TIMEOUTS_CA_GENERATE)"
     while [ ! -f data/proxy/caddy/pki/authorities/local/root.crt ] && [ "$i" -lt "$ca_wait" ]; do
@@ -156,14 +156,14 @@ cmd_up() {
     done
     [ -f data/proxy/caddy/pki/authorities/local/root.crt ] \
         && ok "local CA at data/proxy/caddy/pki/authorities/local/root.crt" \
-        || warn "the proxy has not produced a CA yet - 'dx logs proxy' if TLS misbehaves"
+        || warn "the proxy has not produced a CA yet - 'ssmd logs proxy' if TLS misbehaves"
 
     # Wait for the backing services BEFORE the app, and before any hook.
     #
     # The app goes healthy in seconds - its healthz is answered by the web server
     # on purpose - while a first-boot MySQL spends a minute building its data
     # directory. Running `postStart` (usually a migration) in that window fails,
-    # and because hook failures are fatal, `dx up` then reports a broken stack
+    # and because hook failures are fatal, `ssmd up` then reports a broken stack
     # that is actually just a slow one.
     wait_healthy "$DB_ENGINE"    "$( [ "$DB_ENGINE" = postgres ] \
                                      && _cfg TIMEOUTS_DB_START_POSTGRES || _cfg TIMEOUTS_DB_START )"
@@ -178,12 +178,12 @@ cmd_up() {
     # lockfile yet, with the package manager's own unhelpful error. The module
     # handles that case; a hardcoded hook cannot.
     #
-    # `dx wt` has always done it this way. Doing it differently for the base
+    # `ssmd wt` has always done it this way. Doing it differently for the base
     # stack was the actual bug.
     if ! rt_deps_present; then
         log "installing dependencies"
         rt_deps_install || die "dependency install failed - the app will not boot.
-      Fix it, then: dx up      (or run it yourself: dx deps)"
+      Fix it, then: ssmd up      (or run it yourself: ssmd deps)"
     fi
 
     # postCreate runs once per created container; postStart runs every time. The
@@ -206,7 +206,7 @@ cmd_up() {
 #
 # "none" is a pass, not a failure: a service without a healthcheck (the proxy,
 # Mailpit on some tags) has nothing to report and waiting on it would hang
-# forever. A timeout is a warning rather than an error because the next thing dx
+# forever. A timeout is a warning rather than an error because the next thing ssmd
 # does will fail with a far more specific message than "timed out".
 wait_healthy() {
     local svc="$1" limit="${2:-120}" i=0 h
@@ -217,20 +217,20 @@ wait_healthy() {
          "$(container "$svc")" 2>/dev/null || echo none)"
     [ "$h" = none ] && return 0
 
-    printf '%s[dx]%s waiting for %s ' "$C_BLU" "$C_OFF" "$svc"
+    printf '%s[ssmd]%s waiting for %s ' "$C_BLU" "$C_OFF" "$svc"
     while [ "$i" -lt "$limit" ]; do
         h="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
              "$(container "$svc")" 2>/dev/null || echo missing)"
         case "$h" in
             healthy|none) printf ' %shealthy%s\n' "$C_GRN" "$C_OFF"; return 0 ;;
             missing)      printf ' %sgone%s\n' "$C_RED" "$C_OFF"
-                          die "$svc disappeared while starting - dx logs $svc" ;;
+                          die "$svc disappeared while starting - ssmd logs $svc" ;;
         esac
         printf '.'; sleep 2; i=$((i+2))
     done
     printf ' %stimed out after %ss%s\n' "$C_YLW" "$limit" "$C_OFF"
     warn "$svc is not healthy yet. Continuing, but the next step may fail."
-    hint "dx logs $svc --tail 50"
+    hint "ssmd logs $svc --tail 50"
     return 0
 }
 
@@ -255,7 +255,7 @@ run_hooks() {
             # with its migrations half-applied is worse than one that did not
             # come up, because the second kind is obvious.
             die "$phase hook failed: $h
-      Fix it, then: dx up   (or edit hooks.$phase in stack.yml)"
+      Fix it, then: ssmd up   (or edit hooks.$phase in stack.yml)"
         fi
     done
 }
@@ -271,7 +271,7 @@ cmd_down() {
         local row slug kind
         for row in "${rows[@]}"; do
             [ -z "$row" ] && continue
-            IFS="$DX_FS" read -r slug kind <<< "$row"
+            IFS="$SSMD_FS" read -r slug kind <<< "$row"
             docker compose -p "${PROJECT}-${kind}-${slug}" -f docker-compose.instance.yml \
                 --profile queue --profile sandbox stop 2>/dev/null || true
         done
@@ -297,7 +297,7 @@ EOF
     echo
     confirm "Really nuke stack '${STACK_NAME}'?" || exit 1
 
-    # A snapshot first, because "I meant dx down" is a thing that happens and the
+    # A snapshot first, because "I meant ssmd down" is a thing that happens and the
     # database is the only part of this that cannot be rebuilt.
     if [ "$DB_ENGINE" != none ] && container_running "$DB_ENGINE"; then
         log "taking a final snapshot before destroying the database"
@@ -319,12 +319,12 @@ EOF
         || warn "could not remove some state - try: sudo rm -rf data/db data/storage data/proxy"
     rm -f data/state/postcreate.* data/state/verify-*.since
     audit "stack.nuke" ""
-    ok "nuked. 'dx up' rebuilds from nothing; snapshots survived in data/snapshots/"
+    ok "nuked. 'ssmd up' rebuilds from nothing; snapshots survived in data/snapshots/"
 }
 
 cmd_ca_cert() {
     local src=data/proxy/caddy/pki/authorities/local/root.crt
-    [ -f "$src" ] || die "no CA yet - start the stack first: dx up"
+    [ -f "$src" ] || die "no CA yet - start the stack first: ssmd up"
     cp "$src" "data/state/${STACK_NAME}-local-ca.crt"
     cat <<EOF
 Root certificate: $(pwd)/data/state/${STACK_NAME}-local-ca.crt
@@ -349,7 +349,7 @@ cmd_debug() {
         status)
             echo "XDEBUG_MODE=${XDEBUG_MODE:-off}"
             [ "${XDEBUG_MODE:-off}" = off ] \
-                && hint "dx debug on   (then listen on port 9003 in your editor)" ;;
+                && hint "ssmd debug on   (then listen on port 9003 in your editor)" ;;
         on|off)
             local mode; mode="$( [ "$1" = on ] && echo "${2:-debug,develop}" || echo off )"
             # Written into .env rather than exported, because the setting has to
@@ -363,8 +363,8 @@ cmd_debug() {
             XDEBUG_MODE="$mode" compose up -d --force-recreate app
             container_running queue && XDEBUG_MODE="$mode" compose --profile queue up -d --force-recreate queue
             ok "xdebug $1"
-            [ "$1" = on ] && hint "your editor should listen on 9003; IDE key 'dx'" ;;
-        *) die "usage: dx debug [on|off|status]" ;;
+            [ "$1" = on ] && hint "your editor should listen on 9003; IDE key 'ssmd'" ;;
+        *) die "usage: ssmd debug [on|off|status]" ;;
     esac
 }
 
@@ -378,7 +378,7 @@ cmd_fix_perms() {
     docker run --rm -v "$APP_DIR:/app" "$IMAGE_HELPER" sh -c \
         "cd /app && for t in $targets; do [ -e \"\$t\" ] && chown -R ${HOST_UID}:${HOST_GID} \"\$t\"; done; exit 0"
 
-    # And the stack's own caches. A root-owned /dx/cache stops every runtime
+    # And the stack's own caches. A root-owned /ssmd/cache stops every runtime
     # dead - the python venv cannot be created, composer cannot write, npm
     # cannot write - and the container then crash-loops saying only "restarting".
     log "repairing ownership under data/"
@@ -409,14 +409,14 @@ cmd_mcp_install() {
   "mcpServers": {
     "${STACK_NAME}-devstack": {
       "command": "$py",
-      "args": ["${DX_ROOT}/mcp/server.py"],
-      "env": { "DX_ROOT": "${DX_ROOT}" }
+      "args": ["${SSMD_ROOT}/mcp/server.py"],
+      "env": { "SSMD_ROOT": "${SSMD_ROOT}" }
     }
   }
 }
 EOF
     ok "wrote $cfg"
-    hint "install the server's dependencies once:  pip install -r ${DX_ROOT}/mcp/requirements.txt"
+    hint "install the server's dependencies once:  pip install -r ${SSMD_ROOT}/mcp/requirements.txt"
     hint "then restart Claude Code, or /mcp -> reconnect"
 }
 
@@ -428,7 +428,7 @@ case "$CMD" in
     down|stop)          cmd_down ;;
     nuke)               cmd_nuke ;;
     restart)            cmd_down; cmd_up "$@" ;;
-    recreate)           [ $# -ge 1 ] || die "usage: dx recreate <service>"
+    recreate)           [ $# -ge 1 ] || die "usage: ssmd recreate <service>"
                         compose_all_profiles up -d --force-recreate "$@" ;;
     build)              compose build "$@"; audit "stack.build" "$*" ;;
 
@@ -444,9 +444,9 @@ case "$CMD" in
     # profile banner and aliases are wanted. Non-interactive execution must not
     # use one - see run_hooks.
     sh|shell)           require_running "${1:-app}"; dexec "$(container "${1:-app}")" sh -l ;;
-    exec)               [ $# -ge 2 ] || die "usage: dx exec <service> <cmd...>"
+    exec)               [ $# -ge 2 ] || die "usage: ssmd exec <service> <cmd...>"
                         local_svc="$1"; shift; rt_exec "$local_svc" "$*" ;;
-    run)                [ $# -ge 1 ] || die "usage: dx run <cmd...>"
+    run)                [ $# -ge 1 ] || die "usage: ssmd run <cmd...>"
                         rt_exec app "$*" ;;
 
     deps)               rt_deps_install ;;
@@ -455,13 +455,13 @@ case "$CMD" in
     repl|tinker|shell:app) rt_repl ;;
 
     db)                 db_shell ;;
-    db:query)           [ $# -ge 1 ] || die "usage: dx db:query <sql>"; db_require; db_sql "$*" ;;
+    db:query)           [ $# -ge 1 ] || die "usage: ssmd db:query <sql>"; db_require; db_sql "$*" ;;
     db:migrate)         rt_migrate ;;
     db:snapshot)        db_snapshot "${1:-$DB_NAME}" "${2:-manual}" ;;
     db:snapshots)       db_snapshots_list ;;
-    db:restore)         [ $# -ge 1 ] || die "usage: dx db:restore <file> [database]"; db_restore "$@" ;;
-    db:import)          [ $# -ge 1 ] || die "usage: dx db:import <file.sql[.gz]>"; db_import "$@" ;;
-    db:drop)            [ $# -ge 1 ] || die "usage: dx db:drop <database>"; db_drop_database "$@" ;;
+    db:restore)         [ $# -ge 1 ] || die "usage: ssmd db:restore <file> [database]"; db_restore "$@" ;;
+    db:import)          [ $# -ge 1 ] || die "usage: ssmd db:import <file.sql[.gz]>"; db_import "$@" ;;
+    db:drop)            [ $# -ge 1 ] || die "usage: ssmd db:drop <database>"; db_drop_database "$@" ;;
 
     wt|worktree)        wt_dispatch "$@" ;;
     agent)              agent_dispatch "$@" ;;
@@ -475,13 +475,13 @@ case "$CMD" in
     policy)             policy_show ;;
 
     config)             config_dispatch "$@" ;;
-    selftest)           exec "$DX_ROOT/tests/run" "$@" ;;
-    completion)         exec "$DX_ROOT/lib/completion.sh" "${1:-bash}" ;;
+    selftest)           exec "$SSMD_ROOT/tests/run" "$@" ;;
+    completion)         exec "$SSMD_ROOT/lib/completion.sh" "${1:-bash}" ;;
     help|-h|--help)     usage ;;
 
     *)
         # Unrecognised verbs go to the runtime module before failing, which is
-        # what makes `dx artisan`, `dx npm` and `dx go` work without dx knowing
+        # what makes `ssmd artisan`, `ssmd npm` and `ssmd go` work without ssmd knowing
         # any of them exist.
         if rt_dispatch "$CMD" "$@"; then exit 0; fi
         echo "Unknown command '$CMD'." >&2

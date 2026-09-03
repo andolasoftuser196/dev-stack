@@ -1,7 +1,7 @@
-// The dx demo status probe, shared by every Node demo app.
+// The ssmd demo status probe, shared by every Node demo app.
 //
 // Each check opens a real connection. "The container is running" is what
-// `dx verify` already covers, and it is not the question anyone is asking when
+// `ssmd verify` already covers, and it is not the question anyone is asking when
 // they open this page.
 'use strict';
 
@@ -42,9 +42,9 @@ async function probeMail() {
 
 async function status(framework) {
   const lines = [
-    'dx demo app',
-    `runtime=${process.env.DX_RUNTIME || 'node'} framework=${framework} version=${process.versions.node}`,
-    `instance=${process.env.DX_INSTANCE || 'main'}`,
+    'ssmd demo app',
+    `runtime=${process.env.SSMD_RUNTIME || 'node'} framework=${framework} version=${process.versions.node}`,
+    `instance=${process.env.SSMD_INSTANCE || 'main'}`,
     await probeDatabase(),
     await probeCache(),
     await probeMail(),

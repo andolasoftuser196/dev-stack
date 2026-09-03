@@ -4,7 +4,7 @@
 
   A suite that names its own database is a suite that truncates whatever that
   name points at, and the usual failure is that the override is commented out
-  and nobody notices until the development data is gone. dx sets DB_DATABASE to
+  and nobody notices until the development data is gone. ssmd sets DB_DATABASE to
   a disposable name in the environment before invoking the runner, and refuses
   to run at all if the name it computed does not look disposable.
 -->

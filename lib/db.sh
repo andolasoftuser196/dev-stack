@@ -1,6 +1,6 @@
 # lib/db.sh - database operations, engine-agnostic at the call site.
 #
-# Every function here dispatches on $DB_ENGINE. Callers (dx, runtimes, agent
+# Every function here dispatches on $DB_ENGINE. Callers (ssmd, runtimes, agent
 # sandboxes) never learn which engine is running, which is what lets a runtime
 # module like runtimes/go/commands.sh call db_create_database without caring
 # whether it is talking to MySQL or Postgres.
@@ -25,7 +25,7 @@ db_internal_port() { printf '%s' "${DB_INTERNAL_PORT:-0}"; }
 
 # Does <name> match one of the patterns in <config key>? The patterns are a
 # space-separated glob list, and {db} expands to the development database - so
-# a project renaming its database does not silently widen what dx will drop.
+# a project renaming its database does not silently widen what ssmd will drop.
 db_matches_patterns() {  # <name> <CONFIG_SUFFIX>
     local name="$1" pat
     for pat in $(_cfg "$2"); do
@@ -86,7 +86,7 @@ db_create_database() {  # db_create_database <name>
     audit "db.create" "$name"
 }
 
-# The one function in dx that can destroy a database. Every caller goes through
+# The one function in ssmd that can destroy a database. Every caller goes through
 # it, and it refuses outright on anything that does not look disposable.
 db_drop_database() {  # db_drop_database <name> [--no-snapshot]
     local name="$1" snap=1
@@ -94,17 +94,17 @@ db_drop_database() {  # db_drop_database <name> [--no-snapshot]
     db_require
 
     # The pattern check is a backstop, not the primary control. The primary
-    # control is that nothing in dx ever passes the development database name
+    # control is that nothing in ssmd ever passes the development database name
     # here - but a backstop is what stands between a shell typo and a bad day.
     if [ "$name" = "$DB_NAME" ]; then
         die "refusing to drop '$name' - that is this stack's development database.
-      If you really mean it: dx nuke  (which at least says what it is doing)"
+      If you really mean it: ssmd nuke  (which at least says what it is doing)"
     fi
     db_matches_patterns "$name" DATABASE_SAFETY_DISPOSABLE || die \
         "refusing to drop '$name' - it does not match a disposable pattern.
       Allowed: $(db_disposable_patterns)
       Widen it deliberately if you must:
-        dx config set database_safety.disposable \"<patterns>\""
+        ssmd config set database_safety.disposable \"<patterns>\""
 
     [ "$(_cfg DATABASE_SAFETY_SNAPSHOT_BEFORE_DESTROY)" = "true" ] || snap=0
 
@@ -191,7 +191,7 @@ db_restore() {  # db_restore <snapshot-file> [database]
 db_snapshots_list() {
     ensure_dirs
     if [ -z "$(ls -A data/snapshots 2>/dev/null)" ]; then
-        echo "  (none yet - dx db:snapshot)"
+        echo "  (none yet - ssmd db:snapshot)"
         return 0
     fi
     ls -lh data/snapshots/*.sql.gz 2>/dev/null | awk '{printf "  %-10s %s %s %s  %s\n", $5, $6, $7, $8, $9}'
@@ -205,7 +205,7 @@ db_table_count() {  # db_table_count [database]
     esac
 }
 
-# Called at the end of `dx up`. An empty database is the single most common
+# Called at the end of `ssmd up`. An empty database is the single most common
 # reason a fresh stack 500s, and the fix is not discoverable from the error.
 db_warn_if_empty() {
     [ "$DB_ENGINE" = none ] && return 0
@@ -216,9 +216,9 @@ db_warn_if_empty() {
 
   ! Database '${DB_NAME}' has no tables - the app will not work yet.
 
-      dx db:migrate                     build it from the project's migrations
-      dx db:restore <snapshot.sql.gz>   load a snapshot (dx db:snapshots lists them)
-      dx db:import  <file.sql[.gz]>     load a dump from elsewhere
+      ssmd db:migrate                     build it from the project's migrations
+      ssmd db:restore <snapshot.sql.gz>   load a snapshot (ssmd db:snapshots lists them)
+      ssmd db:import  <file.sql[.gz]>     load a dump from elsewhere
 EOF
 }
 

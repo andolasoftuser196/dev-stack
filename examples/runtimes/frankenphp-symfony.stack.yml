@@ -2,16 +2,16 @@
 #
 # The queue role runs 'messenger:consume async'. For a different transport,
 # override the command rather than editing the runtime module:
-#     dx config set runtime.queue_cmd 'php bin/console messenger:consume mine'
+#     ssmd config set runtime.queue_cmd 'php bin/console messenger:consume mine'
 #
-# APP_ENV and APP_DEBUG come from the app's own .env; dx injects only the
+# APP_ENV and APP_DEBUG come from the app's own .env; ssmd injects only the
 # connection details.
 #
 # repo.root already points at the matching demo application, so this runs as-is
 # from a fresh clone:
 #
 #     cp examples/runtimes/frankenphp-symfony.stack.yml config/stack.yml
-#     dx config import && dx up core && dx urls
+#     ssmd config import && ssmd up core && ssmd urls
 #
 # For a real project, change repo.root and repo.git_root to point at it.
 
@@ -60,7 +60,7 @@ tools:
   mcp: true
 
 hooks:
-  # Dependencies are not listed here. `dx up` installs them through the runtime
+  # Dependencies are not listed here. `ssmd up` installs them through the runtime
   # module, which knows the right command for the package manager in use and
   # what to do when there is no lockfile yet. Put project-specific one-time
   # setup here instead.

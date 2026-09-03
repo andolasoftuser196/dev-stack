@@ -1,4 +1,4 @@
-# Python runtime. Same shape as the others: Caddy owns $DX_PORT and answers
+# Python runtime. Same shape as the others: Caddy owns $SSMD_PORT and answers
 # healthz; the ASGI/WSGI server listens on an inner port.
 # The base image is passed in whole, resolved from runtime_images.python in the
 # config database with {version} substituted. No tag is written here: a
@@ -36,21 +36,21 @@ RUN pip install --no-cache-dir uv
 # path, so two worktree instances of branches with different dependencies
 # overwrote each other's site-packages - and the loser failed with
 # ModuleNotFoundError for a package plainly listed in its own manifest. The path
-# comes from DX_VENV, which compose sets per instance.
-ENV HOME=/dx/cache/home \
-    PIP_CACHE_DIR=/dx/cache/pip \
-    UV_CACHE_DIR=/dx/cache/uv \
-    XDG_CONFIG_HOME=/dx/cache/config \
-    XDG_CACHE_HOME=/dx/cache/xdg \
+# comes from SSMD_VENV, which compose sets per instance.
+ENV HOME=/ssmd/cache/home \
+    PIP_CACHE_DIR=/ssmd/cache/pip \
+    UV_CACHE_DIR=/ssmd/cache/uv \
+    XDG_CONFIG_HOME=/ssmd/cache/config \
+    XDG_CACHE_HOME=/ssmd/cache/xdg \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    DX_VENV=/dx/cache/venv/main
+    SSMD_VENV=/ssmd/cache/venv/main
 
 COPY serve.conf /etc/caddy/Caddyfile
-COPY entrypoint.sh /usr/local/bin/dx-entrypoint
-RUN chmod +x /usr/local/bin/dx-entrypoint \
-    && mkdir -p /dx/cache && chmod -R 777 /dx
+COPY entrypoint.sh /usr/local/bin/ssmd-entrypoint
+RUN chmod +x /usr/local/bin/ssmd-entrypoint \
+    && mkdir -p /ssmd/cache && chmod -R 777 /ssmd
 
 WORKDIR /app
-ENTRYPOINT ["/usr/bin/tini", "--", "dx-entrypoint"]
+ENTRYPOINT ["/usr/bin/tini", "--", "ssmd-entrypoint"]
 CMD ["serve"]

@@ -6,7 +6,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "dx-demo-django"
+name = "ssmd-demo-django"
 version = "1.0.0"
 requires-python = ">=3.11"
 dependencies = ["django>=5.0", "psycopg[binary]>=3.2", "celery>=5.4", "redis>=5.0"]
@@ -17,10 +17,10 @@ dev = ["pytest>=8.0", "pytest-django>=4.9"]
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings"
 testpaths = ["tests"]
-# Note what is absent: any database name. dx points the suite at <db>_test in
+# Note what is absent: any database name. ssmd points the suite at <db>_test in
 # the environment. Django's own runner would add its own test_ prefix on top of
 # that, which is why pytest-django is used instead - one disposable name, and
-# one that dx can check.
+# one that ssmd can check.
 
 [tool.hatch.build.targets.wheel]
 packages = ["demo"]

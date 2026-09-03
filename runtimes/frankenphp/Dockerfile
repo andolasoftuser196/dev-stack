@@ -29,24 +29,24 @@ COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 
 # The container runs as the invoking host user, whose UID does not exist in this
 # image's /etc/passwd. Everything that would normally live in $HOME is redirected
-# to /dx/cache, a bind mount dx creates - so composer's cache survives rebuilds
+# to /ssmd/cache, a bind mount ssmd creates - so composer's cache survives rebuilds
 # and is shared across instances instead of being re-downloaded per worktree.
-ENV HOME=/dx/cache/home \
-    COMPOSER_HOME=/dx/cache/composer \
+ENV HOME=/ssmd/cache/home \
+    COMPOSER_HOME=/ssmd/cache/composer \
     COMPOSER_ALLOW_SUPERUSER=1 \
-    XDG_CONFIG_HOME=/dx/cache/config \
-    XDG_CACHE_HOME=/dx/cache/xdg
+    XDG_CONFIG_HOME=/ssmd/cache/config \
+    XDG_CACHE_HOME=/ssmd/cache/xdg
 
 # php.ini and the Caddy config are copied rather than mounted so that the image
-# is self-sufficient; dx bind-mounts over them only when you ask for prod parity.
-COPY php.dev.ini  /usr/local/etc/php/conf.d/zz-dx-dev.ini
-COPY xdebug.ini   /usr/local/etc/php/conf.d/zz-dx-xdebug.ini
+# is self-sufficient; ssmd bind-mounts over them only when you ask for prod parity.
+COPY php.dev.ini  /usr/local/etc/php/conf.d/zz-ssmd-dev.ini
+COPY xdebug.ini   /usr/local/etc/php/conf.d/zz-ssmd-xdebug.ini
 COPY serve.conf   /etc/caddy/Caddyfile
-COPY entrypoint.sh /usr/local/bin/dx-entrypoint
-RUN chmod +x /usr/local/bin/dx-entrypoint \
-    && mkdir -p /dx/cache /data /config \
-    && chmod -R 777 /dx /data /config
+COPY entrypoint.sh /usr/local/bin/ssmd-entrypoint
+RUN chmod +x /usr/local/bin/ssmd-entrypoint \
+    && mkdir -p /ssmd/cache /data /config \
+    && chmod -R 777 /ssmd /data /config
 
 WORKDIR /app
-ENTRYPOINT ["dx-entrypoint"]
+ENTRYPOINT ["ssmd-entrypoint"]
 CMD ["serve"]

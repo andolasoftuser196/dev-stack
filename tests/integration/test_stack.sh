@@ -12,16 +12,16 @@
 
 have_docker_daemon || { t_skip "integration" "no docker daemon"; t_summary; exit; }
 
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/dxint.XXXXXX")"
-STACK="dxit$$"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/ssmdint.XXXXXX")"
+STACK="ssmdit$$"
 cleanup() {
     if [ -d "$WORK/dev-stack" ]; then
-        ( cd "$WORK/dev-stack" && DX_YES=1 ./dx down >/dev/null 2>&1 )
+        ( cd "$WORK/dev-stack" && SSMD_YES=1 ./ssmd down >/dev/null 2>&1 )
     fi
-    docker ps -aq --filter "label=dx.stack=$STACK" | xargs -r docker rm -f >/dev/null 2>&1
+    docker ps -aq --filter "label=ssmd.stack=$STACK" | xargs -r docker rm -f >/dev/null 2>&1
     docker network rm "${STACK}-dev" "${STACK}-dev-isolated" >/dev/null 2>&1
     docker image rm -f "${STACK}-dev/frankenphp:8.3" >/dev/null 2>&1
-    # Container-written files are root-owned; remove them the way dx nuke does.
+    # Container-written files are root-owned; remove them the way ssmd nuke does.
     docker run --rm -v "$WORK:/w" alpine:3 sh -c 'rm -rf /w/*' >/dev/null 2>&1
     rm -rf "$WORK"
 }
@@ -32,7 +32,7 @@ mkdir -p "$WORK/app/public" && ( cd "$WORK/app" && git init -q . )
 cat > "$WORK/app/public/index.php" <<'PHP'
 <?php
 header('Content-Type: text/plain');
-echo "instance=" . (getenv('DX_INSTANCE') ?: '?') . "\n";
+echo "instance=" . (getenv('SSMD_INSTANCE') ?: '?') . "\n";
 echo "memory_limit=" . ini_get('memory_limit') . "\n";
 try {
     new PDO("mysql:host=".getenv('DB_HOST').";port=".getenv('DB_PORT').";dbname=".getenv('DB_DATABASE'),
@@ -43,12 +43,12 @@ $r = new Redis();
 try { $r->connect(getenv('REDIS_HOST'), (int)getenv('REDIS_PORT')); $r->select((int)getenv('REDIS_DB'));
       echo "redis=" . getenv('REDIS_DB') . " ok\n"; } catch (Throwable $e) { echo "redis=FAILED\n"; }
 PHP
-echo '{"name":"dx/it"}' > "$WORK/app/composer.json"
+echo '{"name":"ssmd/it"}' > "$WORK/app/composer.json"
 ( cd "$WORK/app" && git add -A && git -c user.name=t -c user.email=t@l commit -qm init )
 t_ok "fixture application created"
 
 tar -C "$TEST_ROOT" --exclude=./data --exclude=./.git --exclude=./tests \
-    --exclude=./config/dx.db --exclude=./config/dx.db-wal --exclude=./config/dx.db-shm \
+    --exclude=./config/ssmd.db --exclude=./config/ssmd.db-wal --exclude=./config/ssmd.db-shm \
     --exclude=./.stack.env --exclude=__pycache__ -cf - . 2>/dev/null \
     | (mkdir -p "$WORK/dev-stack" && tar -C "$WORK/dev-stack" -xf -)
 cd "$WORK/dev-stack"
@@ -75,13 +75,13 @@ pathlib.Path("config/hosts.yml").write_text(pathlib.Path("config/hosts.yml").rea
     "\nintegration:\n  proxy:\n    bind: 127.0.0.1\n    http: 18390\n    https: 18353\n"
     "  bind:\n    database: 127.0.0.1\n    cache: 127.0.0.1\n")
 PY
-printf 'DX_HOST=integration\n' > .env
+printf 'SSMD_HOST=integration\n' > .env
 t_ok "toolkit copied and configured"
 
-t_section "dx up"
-DX_YES=1 ./dx up core > "$WORK/up.log" 2>&1
+t_section "ssmd up"
+SSMD_YES=1 ./ssmd up core > "$WORK/up.log" 2>&1
 rc=$?
-[ $rc -eq 0 ] && t_ok "dx up core succeeded" || t_fail "dx up core succeeded" \
+[ $rc -eq 0 ] && t_ok "ssmd up core succeeded" || t_fail "ssmd up core succeeded" \
     "$(grep -vE '^#[0-9]+ ' "$WORK/up.log" | tail -25)
 "
 [ $rc -eq 0 ] || { t_summary; exit 1; }
@@ -101,25 +101,25 @@ code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18390/healthz)"
 assert_eq "200" "$code" "healthz is answered by the web server"
 
 t_section "config drives the running container"
-assert_contains "$body" "memory_limit=$(./dx config get php.memory_limit)" \
+assert_contains "$body" "memory_limit=$(./ssmd config get php.memory_limit)" \
     "php.memory_limit reached PHP"
-./dx config set php.memory_limit 321M >/dev/null
-./dx recreate app >/dev/null 2>&1
+./ssmd config set php.memory_limit 321M >/dev/null
+./ssmd recreate app >/dev/null 2>&1
 until curl -sf http://127.0.0.1:18390/healthz >/dev/null 2>&1; do sleep 2; done
 assert_contains "$(curl -sS http://127.0.0.1:18390/)" "memory_limit=321M" \
     "changing config and recreating changes the running process"
 
-t_section "dx verify"
-out="$(./dx verify 2>&1)"
+t_section "ssmd verify"
+out="$(./ssmd verify 2>&1)"
 assert_contains "$out" "healthz 200" "verify checks the web server"
 assert_contains "$out" "database reachable from the app container" "verify checks the database from the app"
 assert_contains "$out" "no error lines" "verify diffs the log"
 
 t_section "worktree instance"
-DX_YES=1 ./dx wt add feature/it > "$WORK/wt.log" 2>&1 \
-    && t_ok "dx wt add succeeded" || t_fail "dx wt add succeeded" "$(tail -20 "$WORK/wt.log")
+SSMD_YES=1 ./ssmd wt add feature/it > "$WORK/wt.log" 2>&1 \
+    && t_ok "ssmd wt add succeeded" || t_fail "ssmd wt add succeeded" "$(tail -20 "$WORK/wt.log")
 "
-assert_contains "$(./dx wt ls)" "feature-it" "the instance is registered"
+assert_contains "$(./ssmd wt ls)" "feature-it" "the instance is registered"
 assert_file "caddy/proxy/sites/feature-it.caddy" "its proxy route exists"
 ib="$(curl -sS --max-time 20 -H "Host: feature-it.${STACK}.test" http://127.0.0.1:18390/ 2>&1)"
 assert_contains "$ib" "instance=feature-it" "the instance is routed by hostname"
@@ -140,28 +140,28 @@ assert_contains "$ib" "memory_limit=321M" "the instance inherits the stack's run
 
 t_section "doctor detects injected drift"
 docker stop "${STACK}-dev-wt-feature-it-app" >/dev/null 2>&1
-out="$(./dx doctor 2>&1)"
+out="$(./ssmd doctor 2>&1)"
 assert_contains "$out" "registered but no container running" "a stopped instance is drift"
 docker start "${STACK}-dev-wt-feature-it-app" >/dev/null 2>&1
 
 t_section "teardown removes everything it made"
-DX_YES=1 ./dx wt rm feature-it --drop-db > "$WORK/rm.log" 2>&1 \
-    && t_ok "dx wt rm succeeded" || t_fail "dx wt rm succeeded" "$(tail -15 "$WORK/rm.log")
+SSMD_YES=1 ./ssmd wt rm feature-it --drop-db > "$WORK/rm.log" 2>&1 \
+    && t_ok "ssmd wt rm succeeded" || t_fail "ssmd wt rm succeeded" "$(tail -15 "$WORK/rm.log")
 "
 assert_no_file "caddy/proxy/sites/feature-it.caddy" "the route is gone"
-assert_contains "$(./dx wt ls)" "no instances" "the registry is empty"
+assert_contains "$(./ssmd wt ls)" "no instances" "the registry is empty"
 assert_ok "a pre-drop snapshot was kept" bash -c "ls data/snapshots/auto-predrop-* >/dev/null 2>&1"
 docker ps -a --format '{{.Names}}' | grep -q "feature-it" \
     && t_fail "no instance containers remain" || t_ok "no instance containers remain"
 
 t_section "destructive guards hold against a live database"
-assert_fail "dx refuses to drop the development database" \
-    env DX_YES=1 ./dx db:drop "${STACK}_dev"
-assert_fail "dx refuses a non-disposable name" env DX_YES=1 ./dx db:drop production
+assert_fail "ssmd refuses to drop the development database" \
+    env SSMD_YES=1 ./ssmd db:drop "${STACK}_dev"
+assert_fail "ssmd refuses a non-disposable name" env SSMD_YES=1 ./ssmd db:drop production
 
-t_section "dx down"
-assert_ok "dx down succeeded" ./dx down
-n="$(docker ps -q --filter "label=dx.stack=$STACK" | wc -l)"
+t_section "ssmd down"
+assert_ok "ssmd down succeeded" ./ssmd down
+n="$(docker ps -q --filter "label=ssmd.stack=$STACK" | wc -l)"
 assert_eq "0" "$n" "no containers left running"
 
 t_summary

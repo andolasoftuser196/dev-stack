@@ -11,7 +11,7 @@ from status import status  # noqa: E402
 
 def test_renders_the_agreed_shape():
     out = status("flask")
-    assert out.startswith("dx demo app")
+    assert out.startswith("ssmd demo app")
 
 
 def test_runs_against_a_disposable_database():

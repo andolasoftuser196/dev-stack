@@ -1,10 +1,10 @@
 ---
 description: Read container logs, filtered to what matters
 argument-hint: "[service] [pattern]"
-allowed-tools: Bash(*/dx logs*), Bash(*/dx status*)
+allowed-tools: Bash(*/ssmd logs*), Bash(*/ssmd status*)
 ---
 
-Run `./dx logs ${1:-app} --tail 200`.
+Run `./ssmd logs ${1:-app} --tail 200`.
 
 If a second argument was given, filter the output to lines matching it.
 Otherwise, if the log is long, filter to error-level lines yourself rather than

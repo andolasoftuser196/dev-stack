@@ -1,4 +1,4 @@
-// Package status renders the dx demo status page.
+// Package status renders the ssmd demo status page.
 //
 // Standard library only - no database driver, no redis client. A TCP probe
 // answers "is it reachable", which is the question, and pulling in three
@@ -35,15 +35,15 @@ func okFailed(ok bool) string {
 	return "FAILED"
 }
 
-// Render returns the plain-text status page every dx demo app serves.
+// Render returns the plain-text status page every ssmd demo app serves.
 func Render() string {
 	e := os.Getenv
 	var b strings.Builder
 
-	fmt.Fprintln(&b, "dx demo app")
+	fmt.Fprintln(&b, "ssmd demo app")
 	fmt.Fprintf(&b, "runtime=%s framework=none version=%s\n",
-		or(e("DX_RUNTIME"), "go"), strings.TrimPrefix(runtime.Version(), "go"))
-	fmt.Fprintf(&b, "instance=%s\n", or(e("DX_INSTANCE"), "main"))
+		or(e("SSMD_RUNTIME"), "go"), strings.TrimPrefix(runtime.Version(), "go"))
+	fmt.Fprintf(&b, "instance=%s\n", or(e("SSMD_INSTANCE"), "main"))
 
 	if db := e("DB_DATABASE"); db != "" {
 		fmt.Fprintf(&b, "database=%s %s\n", db, okFailed(reachable(e("DB_HOST"), e("DB_PORT"))))

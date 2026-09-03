@@ -1,8 +1,24 @@
-# dx - a generic, AI-native development stack
+# ssmd
+
+### Spawn · Scope · Migrate · Destroy
 
 One Docker environment that works the same way for a Laravel app, a CakePHP app,
 a Next.js app, a Django service and a Go service - and that treats coding agents
 as a supported kind of user rather than an afterthought.
+
+The four words are not new commands. They are the four things this toolkit
+already does, named:
+
+| | | |
+|---|---|---|
+| **Spawn** | `up` · `wt add` · `agent spawn` | bring an environment into being - the base stack, a per-branch instance, or a container an agent runs inside |
+| **Scope** | `config explain` · the `host > stack > default` layers | every value knows which layer it came from; every instance gets its own database, redis db, bucket and hostname; every sandbox gets its own network and worktree |
+| **Migrate** | `db:migrate` · `db:snapshot` · `db:restore` · `db:import` | move schema and data, including seeding a branch database from the latest snapshot |
+| **Destroy** | `down` · `nuke` · `db:drop` · `wt rm` · `agent rm` · `agent reap` | tear it down - and snapshot first, always, aborting if the snapshot fails |
+
+Destroy is the one that earns the acronym. Everything else here is convenience;
+being able to throw an environment away without thinking is what makes spawning
+one cheap enough to do per branch, per agent, per experiment.
 
 [![CI](https://github.com/andolasoftuser196/dev-stack/actions/workflows/ci.yml/badge.svg)](https://github.com/andolasoftuser196/dev-stack/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -13,36 +29,36 @@ runtime:
 ```bash
 git clone https://github.com/andolasoftuser196/dev-stack.git dev-stack && cd dev-stack
 cp examples/runtimes/go-service.stack.yml config/stack.yml
-./dx up core && ./dx urls
+./ssmd up core && ./ssmd urls
 ```
 
 Point it at a real project instead:
 
 ```bash
-./dx init --into /path/to/your/project    # detect the project, scaffold a stack
+./ssmd init --into /path/to/your/project    # detect the project, scaffold a stack
 cd /path/to/your/project/dev-stack
-./dx up && ./dx urls
+./ssmd up && ./ssmd urls
 ```
 
 ---
 
 ## What it is
 
-A single `dx` script over a profile-gated `docker-compose.yml`, driven entirely
+A single `ssmd` script over a profile-gated `docker-compose.yml`, driven entirely
 by configuration held in SQLite. **No image tag, port, timeout, threshold or
 pattern is written in code** - if a value appears in a script or a compose file,
 it is a bug. Add a language by adding a directory under `runtimes/`; never by
-editing `dx`.
+editing `ssmd`.
 
 ```
 dev-stack/
-  dx                          the only entry point
-  config/dx.db                the config store (SQLite; not committed)
+  ssmd                          the only entry point
+  config/ssmd.db                the config store (SQLite; not committed)
   config/defaults.yml         toolkit defaults      seed -> scope `default`
   config/stack.yml            this project          seed -> scope `stack`
   config/hosts.yml            per-machine profiles  seed -> scope `host:<n>`
   config/schema.sql           config + history + instances + leases + audit
-  .env                        BOOTSTRAP ONLY: DX_DB, DX_HOST, secrets
+  .env                        BOOTSTRAP ONLY: SSMD_DB, SSMD_HOST, secrets
   docker-compose.yml          base stack, every value interpolated
   docker-compose.instance.yml one worktree or agent instance
   lib/sqlite.sh lib/config.sh the config layer
@@ -52,9 +68,9 @@ dev-stack/
   policy/                     what an agent may do, and what needs a human
   agent/{sandbox,egress}/     the container an agent runs in, and its only way out
   claude-plugin/              skills, commands, subagent, hooks, MCP for Claude Code
-  mcp/server.py               dx exposed as MCP tools
-  scaffold/                   dx init - the only part that needs Python
-  demo-apps/                  one runnable app per runtime, so dx up works now
+  mcp/server.py               ssmd exposed as MCP tools
+  scaffold/                   ssmd init - the only part that needs Python
+  demo-apps/                  one runnable app per runtime, so ssmd up works now
   examples/runtimes/          one stack config per runtime, pointing at them
   tests/                      602 assertions; tests/run
   docs/                       ARCHITECTURE, AGENTS, RUNTIMES, WORKTREES
@@ -72,66 +88,66 @@ Agents        agent spawn|ls|attach|run|verify|diff|rm|reap|policy|audit
 Odds & ends   browse  ca-cert  debug  fix-perms  mcp:install  completion
 ```
 
-`dx artisan`, `dx cake`, `dx npm`, `dx manage`, `dx go` and the rest come from
-the runtime module - `dx describe` lists what this project has.
+`ssmd artisan`, `ssmd cake`, `ssmd npm`, `ssmd manage`, `ssmd go` and the rest come from
+the runtime module - `ssmd describe` lists what this project has.
 
 ## Configuration
 
 Everything lives in a SQLite database, resolved from three layers:
 
 ```
-host:<DX_HOST>   config/hosts.yml      this machine     highest priority
+host:<SSMD_HOST>   config/hosts.yml      this machine     highest priority
 stack            config/stack.yml      this project
 default           config/defaults.yml   the toolkit      lowest
 ```
 
 ```bash
-dx config list [prefix]     every effective value, and which layer it came from
-dx config get <key>         one value
-dx config set <key> <v>     change it now - no file edit, no restart
-dx config explain <key>     why this value is what it is, layer by layer
-dx config history [key]     what changed, when, and who changed it
-dx config export            runtime changes not yet written back to the seeds
+ssmd config list [prefix]     every effective value, and which layer it came from
+ssmd config get <key>         one value
+ssmd config set <key> <v>     change it now - no file edit, no restart
+ssmd config explain <key>     why this value is what it is, layer by layer
+ssmd config history [key]     what changed, when, and who changed it
+ssmd config export            runtime changes not yet written back to the seeds
 ```
 
 The YAML files are **seeds**, not the runtime source of truth: they exist so
-configuration is diffable and committable. The database is what dx reads, which
-is what makes `dx config set` work from a script or over MCP without a YAML
+configuration is diffable and committable. The database is what ssmd reads, which
+is what makes `ssmd config set` work from a script or over MCP without a YAML
 round-trip, and what gives every change an actor and a timestamp.
 
 `.env` is **not** a configuration file. It holds two bootstrap values and any
 secrets:
 
 ```
-DX_DB=config/dx.db     where the store is        (optional)
-DX_HOST=local          which host profile        (a selector, not a setting)
+SSMD_DB=config/ssmd.db     where the store is        (optional)
+SSMD_HOST=local          which host profile        (a selector, not a setting)
 GITHUB_TOKEN=...       secrets, never in the database
 ```
 
 A flat `.stack.env` cache sits on top, rebuilt whenever the database or a seed
-changes, so the common path never opens SQLite and `dx` stays fast.
+changes, so the common path never opens SQLite and `ssmd` stays fast.
 
 ## Three read-only commands, three questions
 
 | | Question | When |
 |---|---|---|
-| `dx preflight` | Will `dx up` work on this machine? | `dx up` failed non-obviously |
-| `dx doctor` | Does reality match what dx believes? | Something drifted |
-| `dx verify` | Is the app working **right now**? | After every change |
+| `ssmd preflight` | Will `ssmd up` work on this machine? | `ssmd up` failed non-obviously |
+| `ssmd doctor` | Does reality match what ssmd believes? | Something drifted |
+| `ssmd verify` | Is the app working **right now**? | After every change |
 
 Merging them would produce a command too slow to run casually and too vague to
-act on. `dx doctor` never auto-fixes: an auto-fixing doctor is one you stop
+act on. `ssmd doctor` never auto-fixes: an auto-fixing doctor is one you stop
 trusting, because you can no longer tell what it changed while you read its
 output.
 
-`dx verify` is the one that earns its keep. Six checks, and the last is **new
+`ssmd verify` is the one that earns its keep. Six checks, and the last is **new
 error lines in the log since the last verify** - which answers "did what I just
 do break something", and nothing else does.
 
 ## Several branches at once
 
 ```bash
-./dx wt add feature/billing
+./ssmd wt add feature/billing
 #   -> worktree     ../worktrees/feature-billing
 #   -> database     app_dev_feature_billing   (seeded from the latest snapshot)
 #   -> redis db     3                         (own logical db + key prefix)
@@ -146,15 +162,15 @@ stop being usable at three concurrent branches, because the memory is gone.
 Redis's logical databases are the real ceiling - the pool is
 `instances.redis_db_min..max` in config, 1–15 by default, because the base stack
 owns 0. A `UNIQUE` constraint on the column enforces it rather than a comment.
-`dx wt ls` shows what is allocated.
+`ssmd wt ls` shows what is allocated.
 
 ## Agent sandboxes
 
 ```bash
-./dx agent spawn feature/billing --owner claude --ttl 4h
-./dx agent attach billing        # a shell inside the sandbox
-./dx agent verify billing        # does it still work?
-./dx agent diff billing          # what changed, and can it land unattended?
+./ssmd agent spawn feature/billing --owner claude --ttl 4h
+./ssmd agent attach billing        # a shell inside the sandbox
+./ssmd agent verify billing        # does it still work?
+./ssmd agent diff billing          # what changed, and can it land unattended?
 ```
 
 A worktree instance plus a container the agent runs **inside**:
@@ -165,7 +181,7 @@ A worktree instance plus a container the agent runs **inside**:
 | Filesystem | the worktree is the only writable path into the repo. **The human's checkout is not mounted.** |
 | Resources | cpus, memory, pids capped. Exit 137 means the memory cap, not a test failure. |
 | Privileges | `no-new-privileges`, `cap_drop: ALL` plus four. |
-| Review | `dx agent diff` evaluates the change against denied paths and size caps. |
+| Review | `ssmd agent diff` evaluates the change against denied paths and size caps. |
 
 The review gate **never blocks the work**. A change touching a migration is
 often exactly right; it just must not land unattended. A gate that refused to
@@ -187,17 +203,17 @@ Four layers, each doing something the others cannot:
    the worktree. Every denial names the alternative, because a guard that only
    says "denied" gets worked around.
 
-3. **An MCP server** (`mcp/server.py`) - dx as typed tools with docstrings the
+3. **An MCP server** (`mcp/server.py`) - ssmd as typed tools with docstrings the
    model reads before calling. Destructive operations require an explicit
    `confirm=True`, so an ambiguous prompt cannot become a dropped database.
 
 4. **A feedback loop** - `/healthz` answered by the web server (not the
    framework), structured JSON logs, Mailpit, a watchable browser at
-   `https://vnc.<domain>/`, and `dx verify` to tie them together. An agent that
+   `https://vnc.<domain>/`, and `ssmd verify` to tie them together. An agent that
    can check its own work is worth more than one that is merely constrained.
 
 ```bash
-./dx mcp:install          # register the MCP server
+./ssmd mcp:install          # register the MCP server
 claude plugin install ./dev-stack/claude-plugin --scope project
 ```
 
@@ -216,7 +232,7 @@ claude plugin install ./dev-stack/claude-plugin --scope project
 ## Requirements
 
 Docker with the compose v2 plugin, bash, git. That is the whole list for daily
-use. `dx init` additionally wants python3 with jinja2 - and only `dx init`.
+use. `ssmd init` additionally wants python3 with jinja2 - and only `ssmd init`.
 
 Linux or macOS. On Windows, WSL2 with the repository on the ext4 filesystem: a
 bind mount from `/mnt/c` makes every file operation 10–50× slower and breaks
@@ -244,7 +260,7 @@ Participation is under the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 [MIT](LICENSE) - Copyright (c) 2026 Siba Maharana.
 
-dx is a **local development** toolkit. It is not hardened for production or for
+ssmd is a **local development** toolkit. It is not hardened for production or for
 multi-tenant use, and the services it starts are development services with
 development defaults. [SECURITY.md](SECURITY.md) says which boundaries it does
 claim, and [docs/AGENTS.md](docs/AGENTS.md) says what the agent sandbox buys and

@@ -18,7 +18,7 @@ broker = "redis://%s:%s/%s" % (
     os.environ.get("REDIS_DB", "0"),
 )
 
-app = Celery("dx_demo", broker=broker, backend=broker)
+app = Celery("ssmd_demo", broker=broker, backend=broker)
 app.conf.beat_schedule = {}
 
 

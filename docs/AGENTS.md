@@ -25,9 +25,9 @@ they would otherwise have watched.
   └───────────────────────────────────────────────────────────┘
 
   sandbox mounts:  /app     this instance's git worktree          (rw)
-                   /dx      the toolkit                          (ro, with one
-                            rw window at /dx/data/state for audit)
-                   /dx-ca   the stack's local CA                  (ro)
+                   /ssmd      the toolkit                          (ro, with one
+                            rw window at /ssmd/data/state for audit)
+                   /ssmd-ca   the stack's local CA                  (ro)
                    the human's checkout is NOT mounted
 ```
 
@@ -69,13 +69,13 @@ The instance's git worktree is mounted at `/app` and is the only writable path
 into the repository. The human's checkout is not mounted at all, so an agent
 cannot edit the branch they are on even by accident.
 
-`/dx` is read-only, with one deliberate writable window at `/dx/data/state` so
+`/ssmd` is read-only, with one deliberate writable window at `/ssmd/data/state` so
 the audit trail from inside the sandbox lands in the same file as the one
-outside. The CA mounts at `/dx-ca`, not inside `/dx` - Docker has to *create* a
+outside. The CA mounts at `/ssmd-ca`, not inside `/ssmd` - Docker has to *create* a
 bind mount's mountpoint, and it cannot create one inside a read-only mount.
 
 The `guard-path` hook additionally refuses writes outside `/app` and
-`/home/agent` when `DX_SANDBOX=1`. That is defence in depth against a confused
+`/home/agent` when `SSMD_SANDBOX=1`. That is defence in depth against a confused
 agent, not against a determined one: it is a Claude Code hook, so it constrains
 Claude Code's tools and nothing else. A shell command that writes elsewhere is
 constrained by the container's mounts, which is the real control.
@@ -93,7 +93,7 @@ constrained by the container's mounts, which is the real control.
 - `pids_limit` protects the *other* services on the box: without it, anything in
   a container can fork until the host's pid table is exhausted.
 
-Check the arithmetic before raising `max_concurrent`: `dx preflight` warns when
+Check the arithmetic before raising `max_concurrent`: `ssmd preflight` warns when
 `max_concurrent × memory` plus the base stack exceeds the machine's RAM.
 
 ### 4. Privileges - defence in depth, nothing more
@@ -117,7 +117,7 @@ edits the assertions to match new behaviour passes its own suite. The review gat
 holds test-config and baseline files for exactly this reason - see
 `policy/denied-paths.tsv`, and add your project's own.
 
-**The orchestrator is host-root-equivalent.** `dx` runs on the host and manages
+**The orchestrator is host-root-equivalent.** `ssmd` runs on the host and manages
 containers; the MCP server mounts the docker socket. That is irreducible - making
 containers is the job - and it is why the MCP server is bound to loopback and
 gated behind a profile rather than on by default.
@@ -137,11 +137,11 @@ stack and every running instance - a sandbox verifying "its" app would silently
 hit someone else's a third of the time.
 
 The unambiguous names are the instance slug (an explicit alias) and the container
-name. `$DX_APP_URL` in the sandbox is set to the latter; the base stack's app has
+name. `$SSMD_APP_URL` in the sandbox is set to the latter; the base stack's app has
 the alias `main`.
 
 ```
-http://$DX_APP_URL/     this instance          ✓
+http://$SSMD_APP_URL/     this instance          ✓
 http://<slug>/          this instance          ✓
 http://main/            the base stack's app   ✓
 http://app/             whichever answers first ✗
@@ -149,7 +149,7 @@ http://app/             whichever answers first ✗
 
 ## The review gate
 
-`dx agent diff <slug>` evaluates the change against `policy/denied-paths.tsv` and
+`ssmd agent diff <slug>` evaluates the change against `policy/denied-paths.tsv` and
 the size caps in `policy/policy.yml`, and returns a verdict.
 
 **It never blocks the work.** This is the most important sentence in the design.
@@ -172,7 +172,7 @@ coherent 300-line change into two 150-line ones makes it harder to review, not
 easier. The verdict routes work to a reviewer; it is not a score to optimise.
 
 The gate ships with unattended landing **off**. Turning it on is a deliberate act
-by someone who has read `dx agent audit` for a while.
+by someone who has read `ssmd agent audit` for a while.
 
 ## Leases
 
@@ -180,8 +180,8 @@ Each sandbox holds a lease with an owner and an expiry. Without one, an agent
 that crashed holds a slot and a Redis logical database forever, and both are hard
 limits.
 
-`dx agent reap` removes sandboxes whose lease has expired, after asking. It is an
-explicit command rather than something `dx up` does, because several sandboxes
+`ssmd agent reap` removes sandboxes whose lease has expired, after asking. It is an
+explicit command rather than something `ssmd up` does, because several sandboxes
 run at once and there is no moment when "anything that exists is debris" is true.
 (A strictly serial runner *can* sweep at startup for exactly that reason: at
 startup nothing legitimate exists, so anything matching is debris. Running
@@ -190,15 +190,15 @@ several at once removes that guarantee, and the lease is what replaces it.)
 ## Operating it
 
 ```bash
-dx agent spawn <branch> --owner claude --ttl 4h --egress allowlist
-dx agent ls                       # slugs, branches, leases, URLs
-dx agent attach <slug>            # a shell inside
-dx agent run <slug> '<command>'   # one command inside
-dx agent verify <slug>            # does the app still work?
-dx agent diff <slug>              # what changed, and the verdict
-dx agent audit -n 100             # what has actually been done
-dx agent rm <slug> --drop-db      # snapshots, then drops
-dx agent reap
+ssmd agent spawn <branch> --owner claude --ttl 4h --egress allowlist
+ssmd agent ls                       # slugs, branches, leases, URLs
+ssmd agent attach <slug>            # a shell inside
+ssmd agent run <slug> '<command>'   # one command inside
+ssmd agent verify <slug>            # does the app still work?
+ssmd agent diff <slug>              # what changed, and the verdict
+ssmd agent audit -n 100             # what has actually been done
+ssmd agent rm <slug> --drop-db      # snapshots, then drops
+ssmd agent reap
 ```
 
 `--egress full` exists for development convenience. It gives the sandbox normal
@@ -212,5 +212,5 @@ application input the agent saw** - a ticket description, a comment, an uploaded
 file, the output of a tool.
 
 Treat it as a prompt-injection incident, not a model quirk, until proven
-otherwise. `dx agent audit` and `data/state/agent-tools.jsonl` record what was
+otherwise. `ssmd agent audit` and `data/state/agent-tools.jsonl` record what was
 attempted and what was refused, which is where the reconstruction starts.

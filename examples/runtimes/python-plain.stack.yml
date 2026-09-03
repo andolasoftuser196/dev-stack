@@ -1,8 +1,8 @@
-# Plain Python - a worker, a script runner, or a framework dx does not know.
+# Plain Python - a worker, a script runner, or a framework ssmd does not know.
 #
 # With framework: none and no start_cmd the runtime serves a directory listing.
 # That is a deliberate placeholder rather than a guess; set the real command:
-#     dx config set runtime.start_cmd 'python main.py'
+#     ssmd config set runtime.start_cmd 'python main.py'
 #
 # The demo app here already provides main.py.
 #
@@ -12,7 +12,7 @@
 # from a fresh clone:
 #
 #     cp examples/runtimes/python-plain.stack.yml config/stack.yml
-#     dx config import && dx up core && dx urls
+#     ssmd config import && ssmd up core && ssmd urls
 #
 # For a real project, change repo.root and repo.git_root to point at it.
 
@@ -60,7 +60,7 @@ tools:
   mcp: true
 
 hooks:
-  # Dependencies are not listed here. `dx up` installs them through the runtime
+  # Dependencies are not listed here. `ssmd up` installs them through the runtime
   # module, which knows the right command for the package manager in use and
   # what to do when there is no lockfile yet. Put project-specific one-time
   # setup here instead.

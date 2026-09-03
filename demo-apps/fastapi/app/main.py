@@ -10,7 +10,7 @@ from fastapi.responses import PlainTextResponse
 
 from .status import status
 
-app = FastAPI(title="dx demo", docs_url="/docs")
+app = FastAPI(title="ssmd demo", docs_url="/docs")
 
 
 @app.get("/", response_class=PlainTextResponse)

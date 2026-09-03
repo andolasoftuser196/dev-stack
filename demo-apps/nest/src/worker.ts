@@ -5,7 +5,7 @@ const every = Number(process.env.WORKER_TICK_SECONDS ?? 30) * 1000;
 
 setInterval(() => {
   console.log(JSON.stringify({
-    level: 'info', msg: 'worker tick', instance: process.env.DX_INSTANCE ?? 'main',
+    level: 'info', msg: 'worker tick', instance: process.env.SSMD_INSTANCE ?? 'main',
   }));
 }, every);
 

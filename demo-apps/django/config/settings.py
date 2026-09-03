@@ -1,7 +1,7 @@
-"""Django settings for the dx demo.
+"""Django settings for the ssmd demo.
 
 Everything that varies between machines or instances comes from the process
-environment, which dx injects. Nothing here names a host, a port or a database:
+environment, which ssmd injects. Nothing here names a host, a port or a database:
 a settings file that does is a settings file that connects to the wrong
 instance the first time somebody runs two.
 """
@@ -11,13 +11,13 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dx-demo-not-a-secret")
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "ssmd-demo-not-a-secret")
 DEBUG = os.environ.get("APP_DEBUG", "true").lower() == "true"
 
 # Every worktree instance arrives as a different Host through the proxy, so an
 # explicit list would have to be edited for each one.
 ALLOWED_HOSTS = ["*"]
-CSRF_TRUSTED_ORIGINS = ["https://*.%s" % os.environ.get("DX_DOMAIN", "localhost")]
+CSRF_TRUSTED_ORIGINS = ["https://*.%s" % os.environ.get("SSMD_DOMAIN", "localhost")]
 
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
@@ -54,7 +54,7 @@ CACHES = {
             os.environ.get("REDIS_PORT", "6379"),
             os.environ.get("REDIS_DB", "0"),
         ),
-        "KEY_PREFIX": os.environ.get("CACHE_PREFIX", "dx"),
+        "KEY_PREFIX": os.environ.get("CACHE_PREFIX", "ssmd"),
     }
 }
 

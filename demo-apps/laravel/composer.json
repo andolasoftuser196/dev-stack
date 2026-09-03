@@ -7,11 +7,11 @@
     "resolves fresh. Composer refuses to install anything carrying an open",
     "security advisory, and at any moment some transitive dependency of a",
     "framework has one \u2014 so the demo would break weekly for reasons that say",
-    "nothing about dx.",
+    "nothing about ssmd.",
     "",
     "A real project commits a lockfile, installs from it, and leaves this alone."
   ],
-  "name": "dx/demo-laravel",
+  "name": "ssmd/demo-laravel",
   "type": "project",
   "require": {
     "php": "^8.2",

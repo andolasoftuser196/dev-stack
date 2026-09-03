@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """claude-plugin/hooks - the guardrails.
 
-stdlib unittest, no pytest: these tests must run wherever dx does, and adding a
+stdlib unittest, no pytest: these tests must run wherever ssmd does, and adding a
 dependency to test a component whose whole point is "works on a bare machine"
 would be self-defeating.
 
@@ -23,12 +23,12 @@ ROOT = Path(__file__).resolve().parents[2]
 HOOKS = ROOT / "claude-plugin" / "hooks"
 sys.path.insert(0, str(HOOKS))
 
-import dx_common  # noqa: E402
+import ssmd_common  # noqa: E402
 
 
 def run_hook(name, payload, env=None):
     """Invoke a hook and return (exit_code, parsed_output_or_None, stderr)."""
-    e = {**os.environ, "DX_ROOT": str(ROOT), "CLAUDE_PROJECT_DIR": str(ROOT)}
+    e = {**os.environ, "SSMD_ROOT": str(ROOT), "CLAUDE_PROJECT_DIR": str(ROOT)}
     if env:
         e.update(env)
     p = subprocess.run(
@@ -61,7 +61,7 @@ class TestPosixRegexTranslation(unittest.TestCase):
     """
 
     def test_space_class_matches_a_space(self):
-        rx = dx_common.compile_rule(r"docker[[:space:]]+compose")
+        rx = ssmd_common.compile_rule(r"docker[[:space:]]+compose")
         self.assertIsNotNone(rx)
         self.assertTrue(rx.search("docker compose up"))
 
@@ -83,12 +83,12 @@ class TestPosixRegexTranslation(unittest.TestCase):
         for cls, sample in [("alpha", "a"), ("digit", "7"), ("alnum", "z"),
                             ("space", " "), ("upper", "Q"), ("lower", "q"),
                             ("xdigit", "f"), ("blank", "\t")]:
-            rx = dx_common.compile_rule(r"^[[:%s:]]$" % cls)
+            rx = ssmd_common.compile_rule(r"^[[:%s:]]$" % cls)
             self.assertIsNotNone(rx, cls)
             self.assertTrue(rx.match(sample), "%s should match %r" % (cls, sample))
 
     def test_malformed_rule_returns_none_not_an_exception(self):
-        self.assertIsNone(dx_common.compile_rule("[unclosed"))
+        self.assertIsNone(ssmd_common.compile_rule("[unclosed"))
 
 
 class TestGlobTranslation(unittest.TestCase):
@@ -99,7 +99,7 @@ class TestGlobTranslation(unittest.TestCase):
     """
 
     def m(self, glob, path):
-        return bool(dx_common.glob_to_regex(glob).match(path))
+        return bool(ssmd_common.glob_to_regex(glob).match(path))
 
     def test_doublestar_crosses_separators(self):
         self.assertTrue(self.m("**/composer.json", "composer.json"))
@@ -126,23 +126,23 @@ class TestGlobTranslation(unittest.TestCase):
         self.assertFalse(self.m("*.env", "xaenv"))
 
 
-class TestFindDxRoot(unittest.TestCase):
+class TestFindSsmdRoot(unittest.TestCase):
     def test_env_wins(self):
-        self.assertEqual(dx_common.find_dx_root(), ROOT)
+        self.assertEqual(ssmd_common.find_ssmd_root(), ROOT)
 
-    def test_returns_none_outside_a_dx_project(self):
+    def test_returns_none_outside_a_ssmd_project(self):
         # A hook that fires on unrelated repositories is a hook that gets
-        # uninstalled, so "not a dx project" must be detectable. The search also
-        # walks upward, so the temp dir must not be under a dx tree.
-        for k in ("DX_ROOT", "CLAUDE_PLUGIN_OPTION_DX_ROOT",
+        # uninstalled, so "not a ssmd project" must be detectable. The search also
+        # walks upward, so the temp dir must not be under a ssmd tree.
+        for k in ("SSMD_ROOT", "CLAUDE_PLUGIN_OPTION_SSMD_ROOT",
                   "CLAUDE_PLUGIN_ROOT", "CLAUDE_PROJECT_DIR"):
             os.environ.pop(k, None)
         with tempfile.TemporaryDirectory() as d:
-            self.assertIsNone(dx_common.find_dx_root(d))
+            self.assertIsNone(ssmd_common.find_ssmd_root(d))
 
     def setUp(self):
         self._env = dict(os.environ)
-        os.environ["DX_ROOT"] = str(ROOT)
+        os.environ["SSMD_ROOT"] = str(ROOT)
 
     def tearDown(self):
         os.environ.clear(); os.environ.update(self._env)
@@ -170,7 +170,7 @@ class TestCommandGuard(unittest.TestCase):
         _, out, _ = run_hook("guard-command.py", {
             "tool_name": "Bash", "cwd": str(ROOT),
             "tool_input": {"command": "php artisan test"}})
-        self.assertIn("dx test", out["hookSpecificOutput"]["permissionDecisionReason"])
+        self.assertIn("ssmd test", out["hookSpecificOutput"]["permissionDecisionReason"])
 
     def test_allows_ordinary_work(self):
         for cmd in ["ls -la", "git status", "npm ci", "grep -r x .",
@@ -178,16 +178,16 @@ class TestCommandGuard(unittest.TestCase):
             denied, _ = self.deny(cmd)
             self.assertFalse(denied, "should have allowed: %s" % cmd)
 
-    def test_commands_going_through_dx_are_never_denied(self):
-        # dx's own guards are stricter than any regex; double-guarding would
+    def test_commands_going_through_ssmd_are_never_denied(self):
+        # ssmd's own guards are stricter than any regex; double-guarding would
         # deny the correct action.
-        for cmd in ["./dx test", "dx up", "/usr/local/bin/dx db:drop x_test",
-                    "cd /tmp && ./dx verify"]:
+        for cmd in ["./ssmd test", "ssmd up", "/usr/local/bin/ssmd db:drop x_test",
+                    "cd /tmp && ./ssmd verify"]:
             denied, _ = self.deny(cmd)
             self.assertFalse(denied, "should have allowed: %s" % cmd)
 
-    def test_mentioning_dx_in_an_argument_does_not_bypass(self):
-        denied, _ = self.deny("docker compose up # dx")
+    def test_mentioning_ssmd_in_an_argument_does_not_bypass(self):
+        denied, _ = self.deny("docker compose up # ssmd")
         self.assertTrue(denied)
 
     def test_nudges_a_host_side_framework_cli_without_blocking(self):
@@ -195,11 +195,11 @@ class TestCommandGuard(unittest.TestCase):
             "tool_name": "Bash", "cwd": str(ROOT),
             "tool_input": {"command": "php artisan migrate"}})
         self.assertIsNone(decision(out), "must not block")
-        self.assertIn("dx run", context(out))
+        self.assertIn("ssmd run", context(out))
 
-    def test_outside_a_dx_project_it_does_nothing(self):
+    def test_outside_a_ssmd_project_it_does_nothing(self):
         with tempfile.TemporaryDirectory() as d:
-            env = {k: "" for k in ("DX_ROOT", "CLAUDE_PROJECT_DIR", "CLAUDE_PLUGIN_ROOT")}
+            env = {k: "" for k in ("SSMD_ROOT", "CLAUDE_PROJECT_DIR", "CLAUDE_PLUGIN_ROOT")}
             rc, out, _ = run_hook("guard-command.py", {
                 "tool_name": "Bash", "cwd": d,
                 "tool_input": {"command": "docker compose up"}}, env=env)
@@ -235,17 +235,17 @@ class TestPathGuard(unittest.TestCase):
         self.assertNotIn("review gate", context(out))
 
     def test_sandbox_confines_writes_to_the_worktree(self):
-        for path in ["/etc/passwd", "/dx/lib/core.sh", "/tmp/x"]:
+        for path in ["/etc/passwd", "/ssmd/lib/core.sh", "/tmp/x"]:
             _, out, _ = run_hook("guard-path.py", {
                 "tool_name": "Write", "cwd": str(ROOT),
-                "tool_input": {"file_path": path}}, env={"DX_SANDBOX": "1"})
+                "tool_input": {"file_path": path}}, env={"SSMD_SANDBOX": "1"})
             self.assertEqual(decision(out), "deny", "should have denied %s" % path)
 
     def test_sandbox_allows_its_own_worktree_and_home(self):
         for path in ["/app/src/x.php", "/app", "/home/agent/.bashrc"]:
             _, out, _ = run_hook("guard-path.py", {
                 "tool_name": "Write", "cwd": str(ROOT),
-                "tool_input": {"file_path": path}}, env={"DX_SANDBOX": "1"})
+                "tool_input": {"file_path": path}}, env={"SSMD_SANDBOX": "1"})
             self.assertNotEqual(decision(out), "deny", "should have allowed %s" % path)
 
     def test_confinement_is_inert_outside_a_sandbox(self):
@@ -276,7 +276,7 @@ class TestVerifyReminder(unittest.TestCase):
 
     def test_silent_when_verify_ran(self):
         t = self._transcript([self._tool("Edit", {"file_path": "/x/a.php"}),
-                              self._tool("Bash", {"command": "./dx verify"})])
+                              self._tool("Bash", {"command": "./ssmd verify"})])
         _, out, _ = run_hook("verify-reminder.py", {"cwd": str(ROOT), "transcript_path": t})
         self.assertEqual(context(out), "")
         os.unlink(t)

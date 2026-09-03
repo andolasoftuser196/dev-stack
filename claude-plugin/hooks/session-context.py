@@ -3,7 +3,7 @@
 
 Without this, the first three turns of every session are spent rediscovering the
 runtime, whether the stack is up, and which verbs exist. That is cheap for a
-human to ask and expensive for a model to guess wrong about: guessing `dx artisan`
+human to ask and expensive for a model to guess wrong about: guessing `ssmd artisan`
 in a Go project produces a confident, useless plan.
 
 Kept short on purpose. This is prepended to a session that has not started yet;
@@ -16,36 +16,36 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from dx_common import add_context, dx, find_dx_root, passthrough, read_input  # noqa: E402
+from ssmd_common import add_context, ssmd, find_ssmd_root, passthrough, read_input  # noqa: E402
 
 
 def main() -> None:
     data = read_input()
-    dx_root = find_dx_root(data.get("cwd"))
-    if dx_root is None:
+    ssmd_root = find_ssmd_root(data.get("cwd"))
+    if ssmd_root is None:
         passthrough()
 
-    describe = dx(dx_root, ["describe"], timeout=15)
+    describe = ssmd(ssmd_root, ["describe"], timeout=15)
     if not describe:
         passthrough()
 
-    running = dx(dx_root, ["status"], timeout=20)
+    running = ssmd(ssmd_root, ["status"], timeout=20)
     up = "running" in running
 
     lines = [
-        f"This project has a dx dev-stack at `{dx_root}`.",
+        f"This project has a ssmd dev-stack at `{ssmd_root}`.",
         "",
         describe,
         "",
     ]
     if up:
         lines += [
-            "The stack is up. Use `./dx run <cmd>` rather than running the "
-            "framework CLI on the host, and `./dx verify` to check your work.",
+            "The stack is up. Use `./ssmd run <cmd>` rather than running the "
+            "framework CLI on the host, and `./ssmd verify` to check your work.",
         ]
     else:
         lines += [
-            "The stack is **not running**. Start it with `./dx up` before "
+            "The stack is **not running**. Start it with `./ssmd up` before "
             "anything that needs the app, the database or the cache.",
         ]
     lines += [

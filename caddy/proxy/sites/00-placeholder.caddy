@@ -3,7 +3,7 @@
 # going down takes every instance with it. This file guarantees the glob in
 # ../Caddyfile always matches at least one thing.
 #
-# dx writes real instance routes alongside it as <slug>.caddy. Do not delete.
-(dx_placeholder) {
-	respond "dx placeholder" 200
+# ssmd writes real instance routes alongside it as <slug>.caddy. Do not delete.
+(ssmd_placeholder) {
+	respond "ssmd placeholder" 200
 }

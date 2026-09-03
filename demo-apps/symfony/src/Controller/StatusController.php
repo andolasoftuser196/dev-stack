@@ -11,13 +11,13 @@ class StatusController
     public function index(): Response
     {
         $lines = [
-            'dx demo app',
+            'ssmd demo app',
             sprintf('runtime=%s framework=symfony version=%s',
-                    $_ENV['DX_RUNTIME'] ?? 'frankenphp', PHP_VERSION),
-            'instance=' . ($_ENV['DX_INSTANCE'] ?? 'main'),
+                    $_ENV['SSMD_RUNTIME'] ?? 'frankenphp', PHP_VERSION),
+            'instance=' . ($_ENV['SSMD_INSTANCE'] ?? 'main'),
         ];
 
-        // Built from DATABASE_URL, which is what dx injects and what
+        // Built from DATABASE_URL, which is what ssmd injects and what
         // config/packages/doctrine.yaml reads — so this probe and the migration
         // that just ran are demonstrably talking to the same database.
         $name = $_ENV['DB_DATABASE'] ?? '';
@@ -37,8 +37,8 @@ class StatusController
             $r->connect($_ENV['REDIS_HOST'] ?? 'redis', (int) ($_ENV['REDIS_PORT'] ?? 6379), 5.0);
             $db = (int) ($_ENV['REDIS_DB'] ?? 0);
             $r->select($db);
-            $r->setex('dx:demo', 30, 'ok');
-            $lines[] = sprintf('cache=db%d %s', $db, $r->get('dx:demo') === 'ok' ? 'ok' : 'FAILED');
+            $r->setex('ssmd:demo', 30, 'ok');
+            $lines[] = sprintf('cache=db%d %s', $db, $r->get('ssmd:demo') === 'ok' ? 'ok' : 'FAILED');
         } catch (\Throwable $e) {
             $lines[] = 'cache=FAILED: ' . $e->getMessage();
         }

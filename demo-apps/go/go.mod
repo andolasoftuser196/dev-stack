@@ -1,3 +1,3 @@
-module dx/demo
+module ssmd/demo
 
 go 1.23

@@ -39,20 +39,20 @@ RUN go install github.com/air-verse/air@${AIR_VERSION} \
 # GOPATH and the build cache go on the shared bind mount. A cold Go build cache
 # is the difference between a 4-second and a 90-second restart, and every
 # worktree instance would otherwise start cold.
-ENV HOME=/dx/cache/home \
-    GOPATH=/dx/cache/go \
-    GOCACHE=/dx/cache/go-build \
-    GOMODCACHE=/dx/cache/go-mod \
-    XDG_CONFIG_HOME=/dx/cache/config \
-    PATH=/go/bin:/dx/cache/go/bin:$PATH \
+ENV HOME=/ssmd/cache/home \
+    GOPATH=/ssmd/cache/go \
+    GOCACHE=/ssmd/cache/go-build \
+    GOMODCACHE=/ssmd/cache/go-mod \
+    XDG_CONFIG_HOME=/ssmd/cache/config \
+    PATH=/go/bin:/ssmd/cache/go/bin:$PATH \
     CGO_ENABLED=1
 
 COPY serve.conf /etc/caddy/Caddyfile
-COPY air.toml /dx/air.toml
-COPY entrypoint.sh /usr/local/bin/dx-entrypoint
-RUN chmod +x /usr/local/bin/dx-entrypoint \
-    && mkdir -p /dx/cache && chmod -R 777 /dx
+COPY air.toml /ssmd/air.toml
+COPY entrypoint.sh /usr/local/bin/ssmd-entrypoint
+RUN chmod +x /usr/local/bin/ssmd-entrypoint \
+    && mkdir -p /ssmd/cache && chmod -R 777 /ssmd
 
 WORKDIR /app
-ENTRYPOINT ["/usr/bin/tini", "--", "dx-entrypoint"]
+ENTRYPOINT ["/usr/bin/tini", "--", "ssmd-entrypoint"]
 CMD ["serve"]

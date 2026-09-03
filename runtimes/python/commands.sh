@@ -1,18 +1,18 @@
-# runtimes/python/commands.sh - dx verbs for Python projects.
+# runtimes/python/commands.sh - ssmd verbs for Python projects.
 
 rt_display_name() { echo "Python ${STACK_RUNTIME_VERSION} (${STACK_RUNTIME_FRAMEWORK})"; }
 rt_verbs() { echo "python pip uv manage pytest ruff alembic celery"; }
 
 # NOT `sh -lc`. A login shell sources /etc/profile, which on Debian sets PATH
 # unconditionally - clobbering everything the image added. The go toolchain
-# (/usr/local/go/bin) and the python venv (/dx/cache/venv/bin) both vanish, and
+# (/usr/local/go/bin) and the python venv (/ssmd/cache/venv/bin) both vanish, and
 # the symptom is `go: not found` in a container that plainly has go in it.
 #
 # `docker exec` already applies the image's ENV, so a plain shell has the right
 # PATH and a login shell is strictly worse.
 # `docker exec` starts a fresh process that never runs the entrypoint, so the
 # venv the entrypoint activated is not on this process's PATH. Activate it
-# explicitly - otherwise `dx deps` installs into the system python and the app,
+# explicitly - otherwise `ssmd deps` installs into the system python and the app,
 # which uses the venv, still cannot import anything.
 _py_in() { rt_exec "$@"; }
 
@@ -22,7 +22,7 @@ _py_in() { rt_exec "$@"; }
 # Something has to be installed in it.
 rt_deps_present() {
     dexec "$(container app)" sh -c \
-        'V="${DX_VENV:-/dx/cache/venv/${DX_INSTANCE:-main}}"
+        'V="${SSMD_VENV:-/ssmd/cache/venv/${SSMD_INSTANCE:-main}}"
          ls -A "$V/lib"/python*/site-packages 2>/dev/null | grep -qv "^_"' \
         >/dev/null 2>&1
 }
@@ -77,7 +77,7 @@ rt_test() {
     db_matches_patterns "$test_db" DATABASE_SAFETY_TEST_PATTERN || die \
         "refusing to run tests against '$test_db' - it does not match
       database_safety.test_pattern ($(_cfg DATABASE_SAFETY_TEST_PATTERN)).
-      Nothing in dx will point a suite that truncates tables at a database you
+      Nothing in ssmd will point a suite that truncates tables at a database you
       might care about."
     db_create_database "$test_db"
     audit "test.run" "db=$test_db"
@@ -124,12 +124,12 @@ rt_doctor_notes() {
 # 'django'` immediately after a successful install — because the install went to
 # the venv and the hook ran outside it.
 #
-# Every caller that runs a project command goes through this: hooks, dx run,
-# dx exec, and the per-instance equivalents.
+# Every caller that runs a project command goes through this: hooks, ssmd run,
+# ssmd exec, and the per-instance equivalents.
 rt_exec() {
     local svc="$1"; shift
     dexec "$(container "$svc")" sh -c \
-        'V="${DX_VENV:-/dx/cache/venv/${DX_INSTANCE:-main}}"
+        'V="${SSMD_VENV:-/ssmd/cache/venv/${SSMD_INSTANCE:-main}}"
          [ -d "$V" ] && { export VIRTUAL_ENV="$V" PATH="$V/bin:$PATH"; }
          exec sh -c "$1"' _ "$*"
 }

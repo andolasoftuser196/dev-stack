@@ -11,8 +11,8 @@ fi
 SB="$(mk_sandbox)"; trap 'rm_sandbox "$SB"' EXIT
 load_sandbox "$SB"
 
-# Export everything dx derives, exactly as dx does before invoking compose.
-dxenv() {
+# Export everything ssmd derives, exactly as ssmd does before invoking compose.
+ssmdenv() {
     load_sandbox "$SB" "${1:-local}" >/dev/null 2>&1
     export INSTANCE_SLUG=probe INSTANCE_KIND=agent INSTANCE_DIR=/tmp \
            INSTANCE_DB=probe_db INSTANCE_REDIS_DB=1 AGENT_OWNER=t AGENT_PROXY=
@@ -47,7 +47,7 @@ for kind in frankenphp node python go; do
     config_set services.database "$db" stack >/dev/null
     case "$db" in mysql) config_set database.version 8.0 stack >/dev/null ;;
                   postgres) config_set database.version 16 stack >/dev/null ;; esac
-    dxenv
+    ssmdenv
     pargs=(); [ "$db" != none ] && pargs=(--profile "$db")
     assert_ok "$kind + $db" docker compose -f docker-compose.yml \
         "${pargs[@]}" --profile redis --profile mailpit --profile queue config -q
@@ -58,7 +58,7 @@ t_section "every optional service resolves"
 config_set runtime.kind frankenphp stack >/dev/null
 config_set services.database mysql stack >/dev/null
 config_set database.version 8.0 stack >/dev/null
-dxenv
+ssmdenv
 for p in mysql redis mailpit minio meilisearch pgvector queue scheduler tools browser mcp egress; do
     assert_ok "profile '$p'" docker compose -f docker-compose.yml --profile "$p" config -q
 done
@@ -66,13 +66,13 @@ assert_ok "every profile at once" docker compose -f docker-compose.yml \
     $(for p in $(all_profiles); do printf -- '--profile %s ' "$p"; done) config -q
 
 t_section "instance overlay resolves"
-dxenv
+ssmdenv
 assert_ok "worktree instance" docker compose -f docker-compose.instance.yml --profile queue config -q
 assert_ok "agent instance with sandbox" docker compose -f docker-compose.instance.yml \
     --profile queue --profile sandbox config -q
 
 t_section "the sandbox is hardened as configured"
-dxenv
+ssmdenv
 cfg="$(docker compose -f docker-compose.instance.yml --profile sandbox config 2>/dev/null)"
 assert_contains "$cfg" "no-new-privileges:true" "no-new-privileges set"
 assert_match "$cfg" 'cap_drop:[[:space:]]*(- )?ALL|- ALL' "capabilities dropped"
@@ -89,7 +89,7 @@ t_section "no service is reachable only by the ambiguous name 'app'"
 # collides across the base stack and every instance. Both must carry a unique
 # alias, and the proxy must target it - otherwise https://app.<domain> serves
 # whichever container answers first.
-dxenv
+ssmdenv
 base="$(docker compose -f docker-compose.yml config 2>/dev/null)"
 assert_contains "$base" "APP_UPSTREAM: main:" "the proxy targets 'main', not 'app'"
 n="$(printf '%s' "$base" | grep -c '^ *- main$')"
@@ -105,7 +105,7 @@ n="$(printf '%s' "$inst" | grep -c '^ *- probe$')"
 t_section "instances get the same runtime settings as the base stack"
 # A limit raised in config that applies to main and to nothing else presents as
 # "it works on main but not on my branch".
-for v in PHP_MEMORY_LIMIT PHP_OPCACHE_MEMORY DX_REQUEST_BODY_MAX; do
+for v in PHP_MEMORY_LIMIT PHP_OPCACHE_MEMORY SSMD_REQUEST_BODY_MAX; do
     assert_contains "$inst" "$v:" "instances receive \$$v"
 done
 
@@ -126,12 +126,12 @@ assert_contains "$(docker compose -f docker-compose.yml config 2>/dev/null)" "in
     "no-egress is declared internal"
 
 t_section "the app never runs as root, and a bare compose call fails"
-dxenv
+ssmdenv
 assert_contains "$(docker compose -f docker-compose.yml config 2>/dev/null)" "user: $(id -u):$(id -g)" \
     "containers run as the invoking user"
 out="$(env -u HOST_UID -u HOST_GID docker compose -f docker-compose.yml config -q 2>&1)"; rc=$?
 assert_ne "0" "$rc" "compose without HOST_UID fails rather than running as root"
-assert_contains "$out" "run dx" "and the error names dx"
+assert_contains "$out" "run ssmd" "and the error names ssmd"
 
 t_section "every example produces a valid compose file"
 for f in examples/*/*.stack.yml; do
@@ -141,7 +141,7 @@ for f in examples/*/*.stack.yml; do
     sed -e 's|^  root: .*|  root: ..|' -e 's|^  git_root: .*|  git_root: ..|' \
         "$f" > config/stack.yml
     load_sandbox "$SB" local >/dev/null 2>&1
-    dxenv
+    ssmdenv
     pargs=(); [ "$DB_ENGINE" != none ] && pargs=(--profile "$DB_ENGINE")
     assert_ok "example $(basename "$f" .stack.yml)" \
         docker compose -f docker-compose.yml "${pargs[@]}" --profile redis config -q

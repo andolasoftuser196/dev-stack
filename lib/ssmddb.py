@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SQLite backend for dx when sqlite3(1) is not installed.
+"""SQLite backend for ssmd when sqlite3(1) is not installed.
 
 Reads SQL from stdin and writes rows to stdout separated by U+001F, byte-for-byte
 what `sqlite3 -batch -noheader -separator $'\x1f'` produces, so lib/sqlite.sh can
@@ -22,13 +22,13 @@ import sys
 
 def main() -> int:
     if len(sys.argv) < 2:
-        print("usage: dxdb.py <database>", file=sys.stderr)
+        print("usage: ssmddb.py <database>", file=sys.stderr)
         return 2
 
     script = sys.stdin.read()
     conn = sqlite3.connect(sys.argv[1])
     try:
-        # WAL so a long-running read (a `dx status` in another terminal) never
+        # WAL so a long-running read (a `ssmd status` in another terminal) never
         # blocks a write. Matches what schema.sql sets; harmless to repeat.
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA busy_timeout=5000")
@@ -54,7 +54,7 @@ def main() -> int:
                 out.write("\n")
         conn.commit()
     except sqlite3.Error as e:
-        print(f"dxdb: {e}", file=sys.stderr)
+        print(f"ssmddb: {e}", file=sys.stderr)
         return 1
     finally:
         conn.close()

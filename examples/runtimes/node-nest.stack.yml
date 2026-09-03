@@ -3,13 +3,13 @@
 # queue and scheduler are on because a Nest API usually has BullMQ processors and
 # @nestjs/schedule jobs. They run 'npm run queue' and 'npm run schedule' - add
 # those scripts, or point them elsewhere:
-#     dx config set runtime.queue_cmd 'node dist/worker'
+#     ssmd config set runtime.queue_cmd 'node dist/worker'
 #
 # repo.root already points at the matching demo application, so this runs as-is
 # from a fresh clone:
 #
 #     cp examples/runtimes/node-nest.stack.yml config/stack.yml
-#     dx config import && dx up core && dx urls
+#     ssmd config import && ssmd up core && ssmd urls
 #
 # For a real project, change repo.root and repo.git_root to point at it.
 
@@ -58,7 +58,7 @@ tools:
   mcp: true
 
 hooks:
-  # Dependencies are not listed here. `dx up` installs them through the runtime
+  # Dependencies are not listed here. `ssmd up` installs them through the runtime
   # module, which knows the right command for the package manager in use and
   # what to do when there is no lockfile yet. Put project-specific one-time
   # setup here instead.

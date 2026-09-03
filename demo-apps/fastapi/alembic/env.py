@@ -7,7 +7,7 @@ config = context.config
 
 
 def url() -> str:
-    """Built from the environment dx injects, never from alembic.ini.
+    """Built from the environment ssmd injects, never from alembic.ini.
 
     Each worktree and agent instance gets its own database; a URL baked into a
     committed file would migrate whichever one it happened to name.

@@ -1,7 +1,7 @@
 """Plain Python - no framework, just the standard library's HTTP server.
 
 The runtime's start command points here:
-    dx config set runtime.start_cmd 'python main.py'
+    ssmd config set runtime.start_cmd 'python main.py'
 """
 
 import os
@@ -12,7 +12,7 @@ from status import status
 # 0.0.0.0, not localhost: bound to loopback inside a container the process is
 # unreachable from Caddy, and the symptom is a 502 with an empty app log.
 HOST = "0.0.0.0"
-PORT = int(os.environ.get("PORT") or os.environ.get("DX_APP_PORT") or 8000)
+PORT = int(os.environ.get("PORT") or os.environ.get("SSMD_APP_PORT") or 8000)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -25,7 +25,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def log_message(self, fmt: str, *args) -> None:
-        # Structured, so `dx logs` filtering and `dx verify`'s error diff work
+        # Structured, so `ssmd logs` filtering and `ssmd verify`'s error diff work
         # the same way they do for every other runtime.
         print('{"level":"info","msg":"%s"}' % (fmt % args), flush=True)
 

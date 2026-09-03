@@ -9,7 +9,7 @@ const app = express();
 // not optional: binding 127.0.0.1 inside a container makes the process
 // unreachable from Caddy, which presents as a 502 with nothing whatsoever in
 // the application log.
-const PORT = Number(process.env.PORT || process.env.DX_APP_PORT || 3000);
+const PORT = Number(process.env.PORT || process.env.SSMD_APP_PORT || 3000);
 const HOST = '0.0.0.0';
 
 app.get('/', async (_req, res) => {
@@ -22,6 +22,6 @@ app.get('/', async (_req, res) => {
 
 app.listen(PORT, HOST, () => {
   console.log(JSON.stringify({
-    level: 'info', msg: 'listening', port: PORT, instance: process.env.DX_INSTANCE || 'main',
+    level: 'info', msg: 'listening', port: PORT, instance: process.env.SSMD_INSTANCE || 'main',
   }));
 });

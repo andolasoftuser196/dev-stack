@@ -5,20 +5,20 @@
 # of the action, so the answer is no rather than "a human should look".
 #
 # Every entry names the thing to do instead. A guard that only says "denied"
-# trains people to disable it; a guard that says "use dx test" is followed.
+# trains people to disable it; a guard that says "use ssmd test" is followed.
 
-(^|[;&|[:space:]])docker[[:space:]]+compose[[:space:]]	use dx - raw compose has no HOST_UID, no profile set and does no post-start work
-(^|[;&|[:space:]])docker-compose[[:space:]]	use dx - and that is compose v1, which this stack does not support
-(^|[;&|[:space:]])php[[:space:]]+artisan[[:space:]]+test	use 'dx test' - the bare runner reads DB_DATABASE and RefreshDatabase drops every table in it
-(^|[;&|[:space:]])(vendor/bin/)?phpunit([[:space:]]|$)	use 'dx test' - same reason
-(^|[;&|[:space:]])pytest([[:space:]]|$)	use 'dx test' - it points the suite at a disposable database
-(^|[;&|[:space:]])go[[:space:]]+test([[:space:]]|$)	use 'dx test' - it sets DATABASE_URL to a disposable database
-(^|[;&|[:space:]])composer[[:space:]]+(update|require|remove)	rewrites composer.lock; the diff needs a human. 'dx exec app composer update' if you mean it
-(^|[;&|[:space:]])npm[[:space:]]+(install|update)([[:space:]]|$)	rewrites package-lock.json; use 'dx deps' for a frozen install
-(^|[;&|[:space:]])(pnpm|yarn)[[:space:]]+(add|up|upgrade)	rewrites the lockfile; use 'dx deps' for a frozen install
+(^|[;&|[:space:]])docker[[:space:]]+compose[[:space:]]	use ssmd - raw compose has no HOST_UID, no profile set and does no post-start work
+(^|[;&|[:space:]])docker-compose[[:space:]]	use ssmd - and that is compose v1, which this stack does not support
+(^|[;&|[:space:]])php[[:space:]]+artisan[[:space:]]+test	use 'ssmd test' - the bare runner reads DB_DATABASE and RefreshDatabase drops every table in it
+(^|[;&|[:space:]])(vendor/bin/)?phpunit([[:space:]]|$)	use 'ssmd test' - same reason
+(^|[;&|[:space:]])pytest([[:space:]]|$)	use 'ssmd test' - it points the suite at a disposable database
+(^|[;&|[:space:]])go[[:space:]]+test([[:space:]]|$)	use 'ssmd test' - it sets DATABASE_URL to a disposable database
+(^|[;&|[:space:]])composer[[:space:]]+(update|require|remove)	rewrites composer.lock; the diff needs a human. 'ssmd exec app composer update' if you mean it
+(^|[;&|[:space:]])npm[[:space:]]+(install|update)([[:space:]]|$)	rewrites package-lock.json; use 'ssmd deps' for a frozen install
+(^|[;&|[:space:]])(pnpm|yarn)[[:space:]]+(add|up|upgrade)	rewrites the lockfile; use 'ssmd deps' for a frozen install
 (^|[;&|[:space:]])go[[:space:]]+mod[[:space:]]+tidy	rewrites go.mod and go.sum; that is a diff you did not ask for
-DROP[[:space:]]+DATABASE	dx will not drop a database from a shell. 'dx db:drop <name>' snapshots first and refuses non-disposable names
-TRUNCATE[[:space:]]+TABLE	if a test needs a clean table, it needs a disposable database - 'dx test' gives it one
+DROP[[:space:]]+DATABASE	ssmd will not drop a database from a shell. 'ssmd db:drop <name>' snapshots first and refuses non-disposable names
+TRUNCATE[[:space:]]+TABLE	if a test needs a clean table, it needs a disposable database - 'ssmd test' gives it one
 (^|[;&|[:space:]])rm[[:space:]]+-rf[[:space:]]+/([[:space:]]|$)	no
 (^|[;&|[:space:]])git[[:space:]]+push[[:space:]]+.*--force([[:space:]]|$)	force-push discards someone's work; use --force-with-lease and do it deliberately
 (^|[;&|[:space:]])git[[:space:]]+(checkout|switch)[[:space:]]+.*[[:space:]]--[[:space:]]	discards uncommitted work with no undo

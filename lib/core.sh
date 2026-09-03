@@ -1,6 +1,6 @@
 # lib/core.sh - bootstrap, compose plumbing, output, audit.
 #
-# Sourced by dx before anything else. Everything here is side-effect-free except
+# Sourced by ssmd before anything else. Everything here is side-effect-free except
 # load_config, which is the one function allowed to touch the environment.
 #
 # The rule this file exists to enforce: **no value that belongs to a project or a
@@ -12,7 +12,7 @@
 set -euo pipefail
 
 # ── output ──────────────────────────────────────────────────────────────────
-# Colour only when stdout is a terminal. dx output is routinely piped into a log
+# Colour only when stdout is a terminal. ssmd output is routinely piped into a log
 # or read back by an agent through the MCP server, and escape codes there are
 # noise the model then tries to interpret.
 if [ -t 1 ] && [ "${NO_COLOR:-}" = "" ]; then
@@ -22,11 +22,11 @@ else
     C_DIM=''; C_RED=''; C_GRN=''; C_YLW=''; C_BLU=''; C_OFF=''
 fi
 
-log()  { printf '%s[dx]%s %s\n' "$C_BLU" "$C_OFF" "$*"; }
+log()  { printf '%s[ssmd]%s %s\n' "$C_BLU" "$C_OFF" "$*"; }
 ok()   { printf '  %s[OK]%s   %s\n' "$C_GRN" "$C_OFF" "$*"; }
 warn() { printf '  %s[WARN]%s %s\n' "$C_YLW" "$C_OFF" "$*"; }
 fail() { printf '  %s[FAIL]%s %s\n' "$C_RED" "$C_OFF" "$*"; }
-die()  { printf '%s[dx] ERROR:%s %s\n' "$C_RED" "$C_OFF" "$*" >&2; exit 1; }
+die()  { printf '%s[ssmd] ERROR:%s %s\n' "$C_RED" "$C_OFF" "$*" >&2; exit 1; }
 hint() { printf '%s      %s%s\n' "$C_DIM" "$*" "$C_OFF"; }
 
 # ── host sanity ─────────────────────────────────────────────────────────────
@@ -49,13 +49,13 @@ require_host_os() {
 # A missing .env is fine. Every bootstrap value has a default; the file exists
 # for the machine that needs a different one.
 load_bootstrap() {
-    cd "$DX_ROOT"
+    cd "$SSMD_ROOT"
     [ -f .env ] && { set -a; . ./.env; set +a; }
 
-    export DX_DB_PATH="${DX_DB:-config/dx.db}"
-    case "$DX_DB_PATH" in /*) ;; *) DX_DB_PATH="$DX_ROOT/$DX_DB_PATH" ;; esac
-    export DX_HOST="${DX_HOST:-local}"
-    export DX_ACTOR="${DX_ACTOR:-${USER:-unknown}}"
+    export SSMD_DB_PATH="${SSMD_DB:-config/ssmd.db}"
+    case "$SSMD_DB_PATH" in /*) ;; *) SSMD_DB_PATH="$SSMD_ROOT/$SSMD_DB_PATH" ;; esac
+    export SSMD_HOST="${SSMD_HOST:-local}"
+    export SSMD_ACTOR="${SSMD_ACTOR:-${USER:-unknown}}"
 }
 
 load_config() {
@@ -76,27 +76,27 @@ load_config() {
     export PROJECT="${STACK_NAME}-dev"
 
     [ -d "$STACK_REPO_ROOT" ] || die "repo.root '$STACK_REPO_ROOT' is not a directory.
-      It is resolved relative to $DX_ROOT, and it must point at the application
+      It is resolved relative to $SSMD_ROOT, and it must point at the application
       source - the tree that gets bind-mounted into the app container.
-        dx config set repo.root ../my-app"
+        ssmd config set repo.root ../my-app"
     export APP_DIR;  APP_DIR="$(cd "$STACK_REPO_ROOT" && pwd)"
 
     local gr="${STACK_REPO_GIT_ROOT:-$STACK_REPO_ROOT}"
     [ -d "$gr" ] || die "repo.git_root '$gr' is not a directory.
       Worktree and agent instances are created from it; set it to the
       repository root when repo.root is a subdirectory of a monorepo.
-        dx config set repo.git_root ../.."
+        ssmd config set repo.git_root ../.."
     export GIT_ROOT; GIT_ROOT="$(cd "$gr" && pwd)"
 
     case "${STACK_REPO_WORKTREE_ROOT}" in
         /*) export WORKTREE_ROOT="${STACK_REPO_WORKTREE_ROOT}" ;;
-        *)  export WORKTREE_ROOT="$DX_ROOT/${STACK_REPO_WORKTREE_ROOT}" ;;
+        *)  export WORKTREE_ROOT="$SSMD_ROOT/${STACK_REPO_WORKTREE_ROOT}" ;;
     esac
 
-    export RUNTIME_DIR="$DX_ROOT/runtimes/$STACK_RUNTIME_KIND"
+    export RUNTIME_DIR="$SSMD_ROOT/runtimes/$STACK_RUNTIME_KIND"
     [ -d "$RUNTIME_DIR" ] || die "unknown runtime '$STACK_RUNTIME_KIND'.
-      Available: $(cd "$DX_ROOT/runtimes" && ls -d */ 2>/dev/null | tr -d / | tr '\n' ' ')
-      Set it with: dx config set runtime.kind <name>"
+      Available: $(cd "$SSMD_ROOT/runtimes" && ls -d */ 2>/dev/null | tr -d / | tr '\n' ' ')
+      Set it with: ssmd config set runtime.kind <name>"
 
     derive_images
     derive_ports
@@ -111,8 +111,8 @@ _cfg() {  # _cfg <SHELL_VAR_SUFFIX> - read a resolved config value, or die
     local var="STACK_$1"
     local v="${!var:-}"
     [ -n "$v" ] || die "config key for \$$var is missing.
-      The toolkit defaults should provide it: dx config import
-      Or set it: dx config set $(printf '%s' "$1" | tr 'A-Z_' 'a-z.') <value>"
+      The toolkit defaults should provide it: ssmd config import
+      Or set it: ssmd config set $(printf '%s' "$1" | tr 'A-Z_' 'a-z.') <value>"
     printf '%s' "$v"
 }
 
@@ -146,7 +146,7 @@ derive_images() {
     export IMAGE_EGRESS_BASE; IMAGE_EGRESS_BASE="$(_cfg IMAGES_EGRESS_BASE)"
 }
 
-# Several dx stacks on one host would otherwise all want the same ports. Derive
+# Several ssmd stacks on one host would otherwise all want the same ports. Derive
 # a stable offset from the project identity: same project, same ports forever;
 # different projects, near-certainly different. cksum is POSIX and spreads well
 # enough for the configured span.
@@ -186,7 +186,7 @@ derive_ports() {
     export PORT_REDIS;         PORT_REDIS="$(_cfg PORTS_REDIS)"
 
     # Inner port the app process listens on, behind the runtime's own Caddy.
-    export DX_APP_PORT; DX_APP_PORT="$(_cfg "APP_PORTS_$(printf '%s' "$STACK_RUNTIME_KIND" | tr '[:lower:]' '[:upper:]')")"
+    export SSMD_APP_PORT; SSMD_APP_PORT="$(_cfg "APP_PORTS_$(printf '%s' "$STACK_RUNTIME_KIND" | tr '[:lower:]' '[:upper:]')")"
 }
 
 derive_services() {
@@ -198,7 +198,7 @@ derive_services() {
     export VECTOR_ENGINE="${STACK_SERVICES_VECTOR}"
 
     # Defaulted, not required: a project with services.database: none has no
-    # `database:` block at all, and under `set -u` a bare reference aborts dx
+    # `database:` block at all, and under `set -u` a bare reference aborts ssmd
     # before it can say anything useful. These values are unused in that case -
     # db_require() is what refuses the operations that would need them - but
     # compose still interpolates them, so they must exist.
@@ -279,7 +279,7 @@ derive_app_env() {
     export REDIS_CLIENT; REDIS_CLIENT="$(_cfgd APP_ENV_REDIS_CLIENT phpredis)"
     export MAIL_MAILER;  MAIL_MAILER="$(_cfgd APP_ENV_MAIL_MAILER smtp)"
 
-    # DATABASE_URL, assembled from the parts dx already knows. Empty when there
+    # DATABASE_URL, assembled from the parts ssmd already knows. Empty when there
     # is no database, so a framework reading it gets nothing rather than a URL
     # pointing at a host that does not exist.
     case "$DB_ENGINE" in
@@ -297,7 +297,7 @@ derive_app_env() {
 
 # ── profiles ────────────────────────────────────────────────────────────────
 # Read from config, not declared here. A profile missing from profiles.all
-# becomes a container `dx down` silently leaves running, which is why the list
+# becomes a container `ssmd down` silently leaves running, which is why the list
 # is a single config value rather than a constant in each of three files.
 all_profiles() { printf '%s' "$(_cfg PROFILES_ALL)"; }
 
@@ -335,7 +335,7 @@ profile_args() {
 }
 
 # ── compose ─────────────────────────────────────────────────────────────────
-# One place that knows the project name and the file list. Nothing in dx calls
+# One place that knows the project name and the file list. Nothing in ssmd calls
 # `docker compose` directly; that indirection is what makes it possible to add a
 # file without auditing every call site.
 compose() {
@@ -352,7 +352,7 @@ compose_all_profiles() {
 # `docker exec -it` hard-errors with "cannot attach stdin to a TTY-enabled
 # container" when there is no terminal, which breaks every one of these commands
 # under CI, a cron entry, an MCP call or a plain pipe. Ask for a TTY only when
-# one exists - the single most common reason an agent's dx call fails where the
+# one exists - the single most common reason an agent's ssmd call fails where the
 # human's identical call succeeded.
 dexec() {
     if [ -t 0 ] && [ -t 1 ]; then docker exec -it "$@"; else docker exec "$@"; fi
@@ -365,7 +365,7 @@ container_running() {
 }
 
 require_running() {
-    container_running "$1" || die "service '$1' is not running. Start it: dx up"
+    container_running "$1" || die "service '$1' is not running. Start it: ssmd up"
 }
 
 # ── runtime module dispatch ─────────────────────────────────────────────────
@@ -377,7 +377,7 @@ load_runtime() {
 
 # ── misc ────────────────────────────────────────────────────────────────────
 # Tolerant of a read-only root, because inside an agent sandbox that is exactly
-# what it is. A read-only mount must degrade dx to "cannot record", never to
+# what it is. A read-only mount must degrade ssmd to "cannot record", never to
 # "cannot run".
 ensure_dirs() {
     local d
@@ -397,8 +397,8 @@ slugify() {
         | cut -c1-32
 }
 
-# Append to the audit table. Every state-changing dx command calls this, which
-# is what makes `dx audit` able to answer "what did the agent actually do"
+# Append to the audit table. Every state-changing ssmd command calls this, which
+# is what makes `ssmd audit` able to answer "what did the agent actually do"
 # without trusting the agent's own account of it.
 #
 # Best-effort by design: a read-only mount or a locked database must never be
@@ -408,19 +408,19 @@ audit() {
     local event="$1"; shift
     printf 'INSERT INTO audit(ts, actor, event, detail) VALUES(%s,%s,%s,%s);' \
         "$(sq_quote "$(date -u +%Y-%m-%dT%H:%M:%SZ)")" \
-        "$(sq_quote "${DX_ACTOR:-unknown}")" \
+        "$(sq_quote "${SSMD_ACTOR:-unknown}")" \
         "$(sq_quote "$event")" \
         "$(sq_quote "${*:-}")" | sq >/dev/null 2>&1 || true
 }
 
 confirm() {
     # An agent must never be able to answer its own confirmation prompt. With no
-    # terminal the answer is "no" unless DX_YES was set explicitly by whoever
-    # invoked dx.
-    [ "${DX_YES:-}" = "1" ] && return 0
+    # terminal the answer is "no" unless SSMD_YES was set explicitly by whoever
+    # invoked ssmd.
+    [ "${SSMD_YES:-}" = "1" ] && return 0
     if [ ! -t 0 ]; then
         die "'$1' needs confirmation and there is no terminal.
-      Re-run interactively, or set DX_YES=1 if you are certain."
+      Re-run interactively, or set SSMD_YES=1 if you are certain."
     fi
     printf '%s [y/N] ' "$1"; local a; read -r a
     [ "$a" = "y" ] || [ "$a" = "Y" ]

@@ -4,7 +4,7 @@
 tests/run                  # unit + python - fast, no docker daemon needed
 tests/run --integration    # also the end-to-end tier - real containers, minutes
 tests/run unit/test_yaml   # one file
-dx selftest                # the same runner, through dx
+ssmd selftest                # the same runner, through ssmd
 ```
 
 Exit status is zero only when every assertion passed.
@@ -45,7 +45,7 @@ The Python tiers use stdlib `unittest` for the same reason.
 | `python/test_scaffold.py` | detection for every runtime, and manifest precedence |
 | `unit/test_apps.sh` | every demo app satisfies the contract in `demo-apps/README.md`, and every example points at one that exists |
 | `integration/test_stack.sh` | the whole thing, against Docker |
-| `integration/test_apps.sh` | boots each demo app for real, asks it the same question, and checks that the table its migration claims to create is actually there. `DX_TEST_APPS="go express"` limits it while iterating |
+| `integration/test_apps.sh` | boots each demo app for real, asks it the same question, and checks that the table its migration claims to create is actually there. `SSMD_TEST_APPS="go express"` limits it while iterating |
 
 ## Regressions these were written for
 
@@ -93,7 +93,7 @@ batch, every one of which would have hit a real project:
 - **Lifecycle hooks bypassed the runtime environment.** `run_hooks` called
   `docker exec sh -c` directly, which never runs the entrypoint, so a Django
   migration failed with `ModuleNotFoundError: No module named 'django'`
-  immediately after watching Django install. Hooks, `dx run` and `dx exec` all
+  immediately after watching Django install. Hooks, `ssmd run` and `ssmd exec` all
   go through `rt_exec` now, which is part of the runtime contract.
 - **`run_hooks` ate its own hook list.** `docker exec` reads stdin, and stdin was
   the here-string holding the remaining hooks — so only the first one ever ran.
@@ -106,15 +106,15 @@ batch, every one of which would have hit a real project:
 - **An empty `DJANGO_SETTINGS_MODULE` is worse than an absent one.** Compose
   cannot omit a key conditionally, and `os.environ.setdefault` will not replace
   an empty string — so Django started with no settings at all. Overrides are
-  passed under `DX_`-prefixed names and re-exported only when set.
-- **A root-owned `/dx/cache` crash-looped the container** with no message beyond
+  passed under `SSMD_`-prefixed names and re-exported only when set.
+- **A root-owned `/ssmd/cache` crash-looped the container** with no message beyond
   "restarting". Now it fails on the first boot with the command that fixes it.
 
 ### Found while closing the migration gap
 
-- **dx never injected `DATABASE_URL`** — the name Doctrine, Prisma, SQLAlchemy,
+- **ssmd never injected `DATABASE_URL`** — the name Doctrine, Prisma, SQLAlchemy,
   Diesel, Ecto and node-postgres all read. Derived from the connection details
-  dx already knows, and rebuilt per instance rather than inherited: the base
+  ssmd already knows, and rebuilt per instance rather than inherited: the base
   stack's URL names the base stack's database, and a migration run against it
   from an instance is precisely the accident per-instance databases exist to
   prevent.

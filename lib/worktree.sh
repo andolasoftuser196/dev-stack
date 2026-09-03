@@ -1,4 +1,4 @@
-# lib/worktree.sh - `dx wt`: run several branches at once.
+# lib/worktree.sh - `ssmd wt`: run several branches at once.
 #
 # Each instance is a full environment at https://<slug>.<domain> with its own
 # checkout, database, Redis logical database and bucket, sharing the base
@@ -10,17 +10,17 @@
 
 wt_usage() {
     cat <<'EOF'
-dx wt - run several branches concurrently
+ssmd wt - run several branches concurrently
 
-  dx wt add <branch> [--slug s] [--base b] [--no-queue] [--from-snapshot f] [--empty-db]
-  dx wt ls
-  dx wt up <slug>            start an instance that exists but is stopped
-  dx wt stop <slug>
-  dx wt rm <slug> [--drop-db] [--delete-branch]
-  dx wt logs <slug> [service] [-f]
-  dx wt sh <slug>
-  dx wt exec <slug> <cmd...>
-  dx wt verify <slug>
+  ssmd wt add <branch> [--slug s] [--base b] [--no-queue] [--from-snapshot f] [--empty-db]
+  ssmd wt ls
+  ssmd wt up <slug>            start an instance that exists but is stopped
+  ssmd wt stop <slug>
+  ssmd wt rm <slug> [--drop-db] [--delete-branch]
+  ssmd wt logs <slug> [service] [-f]
+  ssmd wt sh <slug>
+  ssmd wt exec <slug> <cmd...>
+  ssmd wt verify <slug>
 
 Each instance gets:
   https://<slug>.<domain>    own route through the proxy
@@ -39,7 +39,7 @@ wt_add() {
             --no-queue) want_queue=0; shift ;;
             --from-snapshot) from_snapshot="${2:?}"; shift 2 ;;
             --empty-db) seed=0; shift ;;
-            -*) die "unknown flag '$1' (dx wt add --help)" ;;
+            -*) die "unknown flag '$1' (ssmd wt add --help)" ;;
             *) [ -z "$branch" ] && { branch="$1"; shift; } || die "unexpected argument '$1'" ;;
         esac
     done
@@ -48,7 +48,7 @@ wt_add() {
     _instance_add "wt" "$branch" "$slug" "$base" "$want_queue" "$from_snapshot" "$seed" "${USER:-unknown}"
 }
 
-# Shared by `dx wt add` and `dx agent spawn`. The only differences an agent
+# Shared by `ssmd wt add` and `ssmd agent spawn`. The only differences an agent
 # instance introduces are the sandbox container, the lease and the egress
 # policy - everything below is identical, and keeping it identical is what stops
 # the two paths from drifting apart.
@@ -59,15 +59,15 @@ _instance_add() {
     [ -d "$GIT_ROOT/.git" ] || git -C "$GIT_ROOT" rev-parse --git-dir >/dev/null 2>&1 \
         || die "no git repository at $GIT_ROOT - instances need one"
 
-    container_running proxy || die "the base stack is not running. Start it first: dx up"
+    container_running proxy || die "the base stack is not running. Start it first: ssmd up"
 
     slug="${slug:-$(instance_slug_for_branch "$branch")}"
-    instance_exists "$slug" && die "instance '$slug' already exists (dx wt ls)"
+    instance_exists "$slug" && die "instance '$slug' already exists (ssmd wt ls)"
 
     local n; n="$(instances_count)"
     if [ "$n" -ge "$STACK_AGENTS_MAX_CONCURRENT" ] && [ "$kind" = "agent" ]; then
         die "already at agents.max_concurrent=${STACK_AGENTS_MAX_CONCURRENT}.
-      Free a slot: dx agent ls, then dx agent rm <slug>"
+      Free a slot: ssmd agent ls, then ssmd agent rm <slug>"
     fi
 
     local dir="$WORKTREE_ROOT/$slug"
@@ -95,7 +95,7 @@ _instance_add() {
                 db_restore "$latest" "$dbname"
             else
                 log "no snapshot to seed from - the instance starts with an empty database"
-                hint "after it boots:  dx wt exec $slug <your migrate command>"
+                hint "after it boots:  ssmd wt exec $slug <your migrate command>"
             fi
         fi
     fi
@@ -118,7 +118,7 @@ _instance_add() {
     echo
     ok "$kind instance '$slug' is up"
     echo "     https://${slug}.${STACK_DOMAIN}/"
-    echo "     dx wt logs $slug -f       dx wt sh $slug       dx wt verify $slug"
+    echo "     ssmd wt logs $slug -f       ssmd wt sh $slug       ssmd wt verify $slug"
 }
 
 _instance_up() {  # <slug> <want_queue> <want_sandbox>
@@ -155,7 +155,7 @@ _instance_up() {  # <slug> <want_queue> <want_sandbox>
     _instance_run_hooks "$slug" "$STACK_HOOKS_POSTINSTANCE"
 }
 
-# Through the runtime, for the same reason `dx run` is: a project command needs
+# Through the runtime, for the same reason `ssmd run` is: a project command needs
 # the environment the entrypoint set up, and docker exec does not run it.
 _instance_exec() {  # <slug> <cmd...>
     local slug="$1"; shift
@@ -194,7 +194,7 @@ _instance_run_hooks() {
     local slug="$1" hooks="$2" h
     [ -z "$hooks" ] && return 0
     # Array first: _instance_exec runs docker exec, which would otherwise read
-    # the remaining hooks off stdin. Same bug, same shape, as run_hooks in dx.
+    # the remaining hooks off stdin. Same bug, same shape, as run_hooks in ssmd.
     local list=(); mapfile -t list <<< "$hooks"
     for h in "${list[@]}"; do
         [ -z "$h" ] && continue
@@ -213,7 +213,7 @@ wt_rm() {
             *) slug="$1"; shift ;;
         esac
     done
-    [ -n "$slug" ] || die "usage: dx wt rm <slug> [--drop-db] [--delete-branch]"
+    [ -n "$slug" ] || die "usage: ssmd wt rm <slug> [--drop-db] [--delete-branch]"
     instance_load "$slug"
 
     log "removing $INSTANCE_KIND instance '$slug'"
@@ -230,7 +230,7 @@ wt_rm() {
         db_drop_database "$INSTANCE_DB"
     else
         [ "$DB_ENGINE" != none ] && \
-            hint "database '$INSTANCE_DB' kept. Remove it with: dx db:drop $INSTANCE_DB"
+            hint "database '$INSTANCE_DB' kept. Remove it with: ssmd db:drop $INSTANCE_DB"
     fi
 
     if [ "$del_branch" = 1 ]; then
@@ -249,23 +249,23 @@ wt_dispatch() {
     case "$sub" in
         add)      wt_add "$@" ;;
         ls|list)  instances_list wt ;;
-        up)       [ $# -ge 1 ] || die "usage: dx wt up <slug>"
+        up)       [ $# -ge 1 ] || die "usage: ssmd wt up <slug>"
                   _instance_up "$1" 1 0; instance_write_route "$1" "${PROJECT}-wt-${1}-app:${STACK_RUNTIME_PORT}" ;;
-        stop)     [ $# -ge 1 ] || die "usage: dx wt stop <slug>"
+        stop)     [ $# -ge 1 ] || die "usage: ssmd wt stop <slug>"
                   instance_load "$1"
                   docker compose -p "${PROJECT}-${INSTANCE_KIND}-${1}" -f docker-compose.instance.yml \
                       --profile queue --profile sandbox stop ;;
         rm|remove) wt_rm "$@" ;;
-        logs)     [ $# -ge 1 ] || die "usage: dx wt logs <slug> [service] [-f]"
+        logs)     [ $# -ge 1 ] || die "usage: ssmd wt logs <slug> [service] [-f]"
                   local s="$1"; shift; instance_load "$s"
                   docker compose -p "${PROJECT}-${INSTANCE_KIND}-${s}" -f docker-compose.instance.yml \
                       --profile queue --profile sandbox logs --tail 200 "$@" ;;
-        sh|shell) [ $# -ge 1 ] || die "usage: dx wt sh <slug>"
+        sh|shell) [ $# -ge 1 ] || die "usage: ssmd wt sh <slug>"
                   instance_load "$1"
                   dexec "${PROJECT}-${INSTANCE_KIND}-${1}-app" sh -l ;;
-        exec)     [ $# -ge 2 ] || die "usage: dx wt exec <slug> <cmd...>"
+        exec)     [ $# -ge 2 ] || die "usage: ssmd wt exec <slug> <cmd...>"
                   local s="$1"; shift; _instance_exec "$s" "$*" ;;
-        verify)   [ $# -ge 1 ] || die "usage: dx wt verify <slug>"; cmd_verify "$1" ;;
+        verify)   [ $# -ge 1 ] || die "usage: ssmd wt verify <slug>"; cmd_verify "$1" ;;
         help|-h|--help) wt_usage ;;
         *) wt_usage; die "unknown subcommand 'wt $sub'" ;;
     esac

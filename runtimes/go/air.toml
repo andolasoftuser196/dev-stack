@@ -2,11 +2,11 @@
 # conservative about what triggers a rebuild: watching everything means a
 # rebuild every time a log file or a test fixture is written.
 root = "/app"
-tmp_dir = "/dx/cache/air"
+tmp_dir = "/ssmd/cache/air"
 
 [build]
-  cmd = "go build -o /dx/cache/air/main ."
-  bin = "/dx/cache/air/main"
+  cmd = "go build -o /ssmd/cache/air/main ."
+  bin = "/ssmd/cache/air/main"
   include_ext = ["go", "tpl", "tmpl", "html", "sql"]
   exclude_dir = ["assets", "tmp", "vendor", "node_modules", "testdata", ".git"]
   exclude_regex = ["_test\\.go$"]

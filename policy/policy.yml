@@ -5,9 +5,9 @@
 #   Prevention  - the Claude Code hooks in .claude-plugin/hooks/ read
 #                 denied-commands.tsv and refuse the tool call outright. These
 #                 are for actions with no safe version: dropping the dev
-#                 database, running a suite that truncates it, bypassing dx.
+#                 database, running a suite that truncates it, bypassing ssmd.
 #
-#   Review gate - 'dx agent diff' reads denied-paths.tsv and the caps below and
+#   Review gate - 'ssmd agent diff' reads denied-paths.tsv and the caps below and
 #                 returns a verdict. A violation NEVER stops the work. It stops
 #                 the work from landing unattended.
 #
@@ -29,7 +29,7 @@ gate:
   # smallest changes are exactly the ones an agent scopes verification down for,
   # and without this they would be the ones landing on the least evidence.
   require_full_verify: true
-  # Withhold it when 'dx verify' has not passed since the last edit.
+  # Withhold it when 'ssmd verify' has not passed since the last edit.
   require_verify_pass: true
   # Even with everything green, default to "needs a human". Turning this on is a
   # deliberate act by someone who has read the audit log for a while.
@@ -40,11 +40,11 @@ enforce:
   # Refuse raw `docker compose` - it starts a subtly different stack (no
   # HOST_UID, no profile set, no post-start work) and the difference surfaces
   # hours later as a permissions error.
-  require_dx_wrapper: true
-  # Refuse a framework test runner invoked directly. dx test points the suite at
+  require_ssmd_wrapper: true
+  # Refuse a framework test runner invoked directly. ssmd test points the suite at
   # a disposable database; the bare runner points it at whatever the config says,
   # and RefreshDatabase then drops every table in it.
-  require_dx_test: true
+  require_ssmd_test: true
   # Refuse lockfile-rewriting package commands. The diff needs a human.
   protect_lockfiles: true
   # Refuse writes outside the agent's own worktree.

@@ -1,14 +1,14 @@
 # Parallel instances
 
-`dx wt` runs several branches at once, each a full environment at
+`ssmd wt` runs several branches at once, each a full environment at
 `https://<slug>.<domain>/`.
 
 ```bash
-dx wt add feature/billing
-dx wt ls
-dx wt logs billing -f
-dx wt verify billing
-dx wt rm billing --drop-db
+ssmd wt add feature/billing
+ssmd wt ls
+ssmd wt logs billing -f
+ssmd wt verify billing
+ssmd wt rm billing --drop-db
 ```
 
 ## What an instance gets
@@ -31,7 +31,7 @@ branches because the memory is gone.
 
 Redis has sixteen logical databases and the base stack owns 0. **Fifteen
 concurrent instances is a hard limit**, and it will bite before RAM does on any
-reasonable machine. `dx wt ls` shows what is allocated; `dx wt rm` frees it.
+reasonable machine. `ssmd wt ls` shows what is allocated; `ssmd wt rm` frees it.
 
 In practice the useful number is lower - each instance runs an app container and
 optionally a worker, so six to eight is comfortable on 16 GB.
@@ -44,10 +44,10 @@ migrations can take minutes, and a two-minute wait is enough to stop people
 creating instances at all.
 
 ```bash
-dx db:snapshot                              # keep a good one around
-dx wt add feature/x                         # seeds from the newest
-dx wt add feature/x --from-snapshot <file>  # pick one
-dx wt add feature/x --empty-db              # skip it - for testing the migration chain
+ssmd db:snapshot                              # keep a good one around
+ssmd wt add feature/x                         # seeds from the newest
+ssmd wt add feature/x --from-snapshot <file>  # pick one
+ssmd wt add feature/x --empty-db              # skip it - for testing the migration chain
 ```
 
 `--empty-db` is the right choice when the thing under test *is* the migration
@@ -56,42 +56,42 @@ chain from empty. It is the wrong choice the rest of the time.
 ## DNS
 
 With wildcard DNS (`*.<domain>` → this machine) instances just work. Without it,
-`/etc/hosts` cannot express a wildcard, so each instance needs a line - `dx`
+`/etc/hosts` cannot express a wildcard, so each instance needs a line - `ssmd`
 prints it, and writes it for you only if `MANAGE_ETC_HOSTS=1` and you have
 passwordless sudo.
 
 Setting up a wildcard once (dnsmasq, or your router's resolver) is worth more
-than it sounds: it is the difference between `dx wt add` being one command and
+than it sounds: it is the difference between `ssmd wt add` being one command and
 being one command plus a sudo prompt.
 
 ## Removing one
 
 ```bash
-dx wt rm <slug>                    # keeps the branch and the database
-dx wt rm <slug> --drop-db          # snapshots the database first, then drops it
-dx wt rm <slug> --delete-branch    # also deletes the branch, if it is merged
+ssmd wt rm <slug>                    # keeps the branch and the database
+ssmd wt rm <slug> --drop-db          # snapshots the database first, then drops it
+ssmd wt rm <slug> --delete-branch    # also deletes the branch, if it is merged
 ```
 
 `--delete-branch` uses `git branch -d`, never `-D`. A branch with unmerged
 commits is exactly the branch you do not want deleted by a cleanup command, and
-git already knows how to tell the difference - dx reports it and leaves the
+git already knows how to tell the difference - ssmd reports it and leaves the
 branch in place.
 
 Removing an instance deletes its git worktree. Check for uncommitted work first:
-`git -C <path> status`. dx does not check for you, because a prompt in a teardown
+`git -C <path> status`. ssmd does not check for you, because a prompt in a teardown
 command is a prompt people learn to answer without reading.
 
 ## Drift
 
 Containers removed by hand, worktrees deleted with `rm`, branches gone from the
-remote, routes left behind by an interrupted teardown - `dx doctor` finds all of
+remote, routes left behind by an interrupted teardown - `ssmd doctor` finds all of
 it and fixes none of it, on purpose. It reports what is wrong and names the
 command; an auto-fixing doctor is one you stop trusting, because you can no
 longer tell what it changed while you were reading its output.
 
 ## Instances and agents are the same thing
 
-`dx agent spawn` creates an instance through exactly the same code path, then
+`ssmd agent spawn` creates an instance through exactly the same code path, then
 adds a sandbox container, a lease and an egress policy. Keeping them one
 implementation is what stops the two from drifting apart - a fix to instance
 networking cannot land for worktrees and miss agents.

@@ -6,5 +6,5 @@
 # perfectly successful `composer install` is otherwise a genuinely confusing
 # five minutes.
 #
-# Run it through the container: dx cake <command>
+# Run it through the container: ssmd cake <command>
 exec php "$(dirname "$0")/cake.php" "$@"

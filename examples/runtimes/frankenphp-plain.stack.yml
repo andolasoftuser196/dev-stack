@@ -1,8 +1,8 @@
 # Plain PHP - no framework. A legacy application, a single index.php, or a
-# framework dx does not know about.
+# framework ssmd does not know about.
 #
-# framework: none means dx offers only the generic verbs (dx php, dx composer,
-# dx run) and no queue or scheduler. `dx test` still works and still forces a
+# framework: none means ssmd offers only the generic verbs (ssmd php, ssmd composer,
+# ssmd run) and no queue or scheduler. `ssmd test` still works and still forces a
 # disposable database; it just calls vendor/bin/phpunit directly.
 #
 # Nothing runs at boot: with no framework there is no migration command to guess
@@ -12,7 +12,7 @@
 # from a fresh clone:
 #
 #     cp examples/runtimes/frankenphp-plain.stack.yml config/stack.yml
-#     dx config import && dx up core && dx urls
+#     ssmd config import && ssmd up core && ssmd urls
 #
 # For a real project, change repo.root and repo.git_root to point at it.
 
@@ -61,7 +61,7 @@ tools:
   mcp: true
 
 hooks:
-  # Dependencies are not listed here. `dx up` installs them through the runtime
+  # Dependencies are not listed here. `ssmd up` installs them through the runtime
   # module, which knows the right command for the package manager in use and
   # what to do when there is no lockfile yet. Put project-specific one-time
   # setup here instead.

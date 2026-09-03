@@ -1,4 +1,4 @@
-# Only the workflow actions. The runtime images dx uses are pinned in
+# Only the workflow actions. The runtime images ssmd uses are pinned in
 # config/defaults.yml and bumped deliberately - a bot opening a pull request per
 # language version would be noise, and the version is a config value a project
 # chooses, not a dependency to keep current.

@@ -1,6 +1,6 @@
 doctrine:
   dbal:
-    # DATABASE_URL is injected by dx, assembled from the connection details it
+    # DATABASE_URL is injected by ssmd, assembled from the connection details it
     # already knows. Not written here, and not read from the app's own .env:
     # each worktree and agent instance gets its own database, and a URL baked
     # into a committed file would point every one of them at the base stack's.

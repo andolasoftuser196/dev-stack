@@ -5,7 +5,7 @@
 #   policy_check_command  used by the Claude Code PreToolUse hook. Returns 1 and
 #                         a reason for a command that has no safe version. This
 #                         one blocks.
-#   policy_evaluate       used by `dx agent diff`. Prints a verdict. This one
+#   policy_evaluate       used by `ssmd agent diff`. Prints a verdict. This one
 #                         never blocks - a change touching a denied path is still
 #                         a good change, it just needs a human.
 #
@@ -13,7 +13,7 @@
 # denied" is answerable with grep, and adding a rule is a one-line diff a
 # reviewer can read.
 
-POLICY_DIR="${DX_ROOT}/policy"
+POLICY_DIR="${SSMD_ROOT}/policy"
 
 # Translate the documented glob syntax into a bash `case` pattern. bash's `*`
 # already crosses '/', so '**' collapses to '*' - the two-star form exists in the
@@ -60,7 +60,7 @@ policy_check_command() {  # <command string> -> prints reason, returns 1 if deni
 # wrong in one way, not two.
 policy_cap() {  # <caps.max_files> etc.
     local key; key="STACK_$(printf '%s' "$1" | tr 'a-z.' 'A-Z_')"
-    awk -f "$DX_ROOT/lib/yaml.awk" "$POLICY_DIR/policy.yml" 2>/dev/null \
+    awk -f "$SSMD_ROOT/lib/yaml.awk" "$POLICY_DIR/policy.yml" 2>/dev/null \
         | sed -n "s/^${key}='\(.*\)'$/\1/p" | head -n1
 }
 
@@ -116,7 +116,7 @@ policy_show() {
     echo
     echo "  Denied paths ($(grep -cvE '^(#|$)' "$POLICY_DIR/denied-paths.tsv") rules) - held for review, not blocked"
     grep -vE '^(#|$)' "$POLICY_DIR/denied-paths.tsv" | head -8 | awk -F'\t' '{printf "    %-34s %s\n", $1, $2}'
-    echo "    ... (dx agent policy --all for the rest)"
+    echo "    ... (ssmd agent policy --all for the rest)"
     echo
     echo "  Denied commands ($(grep -cvE '^(#|$)' "$POLICY_DIR/denied-commands.tsv") rules) - blocked outright"
     grep -vE '^(#|$)' "$POLICY_DIR/denied-commands.tsv" | head -8 | awk -F'\t' '{printf "    %-44s %s\n", substr($1,1,44), substr($2,1,60)}'

@@ -10,7 +10,7 @@ To adopt one:
 ```bash
 cp examples/runtimes/<closest>.stack.yml config/stack.yml
 # edit: name, domain, repo.root, repo.git_root
-dx config import && dx describe
+ssmd config import && ssmd describe
 ```
 
 ## By runtime
@@ -39,7 +39,7 @@ comes from `config/defaults.yml` and is not restated here. That is the point:
 adopting an example means deciding about a dozen things, not a hundred.
 
 Machine-specific values are not here either. They live in `config/hosts.yml`,
-selected by `DX_HOST` in `.env`:
+selected by `SSMD_HOST` in `.env`:
 
 ```
 local       loopback only - a laptop or workstation
@@ -48,5 +48,5 @@ alt-ports   a machine already running something else on 80/443
 ci          no published ports, nothing interactive, no browser
 ```
 
-Add a machine by adding a key to `config/hosts.yml` and setting `DX_HOST` on it.
+Add a machine by adding a key to `config/hosts.yml` and setting `SSMD_HOST` on it.
 No code changes, and `tests/unit/test_config.sh` covers that path.

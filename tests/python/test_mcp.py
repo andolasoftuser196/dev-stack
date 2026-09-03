@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""mcp/server.py - the tool surface an agent drives dx through.
+"""mcp/server.py - the tool surface an agent drives ssmd through.
 
 The mcp package is not installed in the test environment (it lives in the MCP
 container), so the module is loaded with a stub in place. What is under test is
@@ -17,8 +17,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def load_server(dx_root):
-    """Import mcp/server.py with a stubbed FastMCP and a chosen DX_ROOT."""
+def load_server(ssmd_root):
+    """Import mcp/server.py with a stubbed FastMCP and a chosen SSMD_ROOT."""
     stub = types.ModuleType("mcp")
     server_mod = types.ModuleType("mcp.server")
     fastmcp = types.ModuleType("mcp.server.fastmcp")
@@ -46,15 +46,15 @@ def load_server(dx_root):
         sys.modules[name] = mod
 
     import os
-    old = os.environ.get("DX_ROOT")
-    os.environ["DX_ROOT"] = str(dx_root)
-    spec = importlib.util.spec_from_file_location("dxmcp", ROOT / "mcp" / "server.py")
+    old = os.environ.get("SSMD_ROOT")
+    os.environ["SSMD_ROOT"] = str(ssmd_root)
+    spec = importlib.util.spec_from_file_location("ssmdmcp", ROOT / "mcp" / "server.py")
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     if old is None:
-        os.environ.pop("DX_ROOT", None)
+        os.environ.pop("SSMD_ROOT", None)
     else:
-        os.environ["DX_ROOT"] = old
+        os.environ["SSMD_ROOT"] = old
     return m
 
 
@@ -98,11 +98,11 @@ class TestToolSurface(unittest.TestCase):
         self.tools = self.m.mcp.tools
 
     def test_expected_tools_are_registered(self):
-        for name in ["dx_describe", "dx_status", "dx_preflight", "dx_doctor", "dx_verify",
-                     "dx_logs", "dx_errors", "db_query", "db_snapshot", "db_snapshots",
-                     "mail_latest", "dx_instances", "wt_add", "wt_remove",
+        for name in ["ssmd_describe", "ssmd_status", "ssmd_preflight", "ssmd_doctor", "ssmd_verify",
+                     "ssmd_logs", "ssmd_errors", "db_query", "db_snapshot", "db_snapshots",
+                     "mail_latest", "ssmd_instances", "wt_add", "wt_remove",
                      "agent_spawn", "agent_diff", "agent_run", "agent_audit",
-                     "policy_check", "dx_up", "dx_test", "dx_run"]:
+                     "policy_check", "ssmd_up", "ssmd_test", "ssmd_run"]:
             self.assertIn(name, self.tools, name)
 
     def test_every_tool_has_a_docstring_the_model_can_act_on(self):
@@ -122,10 +122,10 @@ class TestToolSurface(unittest.TestCase):
                     "TRUNCATE TABLE users", "truncate users"]:
             out = self.tools["db_query"](sql)
             self.assertIn("REFUSED", out, sql)
-            self.assertIn("dx_test", out, "the refusal must name the alternative")
+            self.assertIn("ssmd_test", out, "the refusal must name the alternative")
 
     def test_db_query_allows_ordinary_statements(self):
-        # It shells out to dx, which will fail without a stack - the point is
+        # It shells out to ssmd, which will fail without a stack - the point is
         # only that it was not refused before getting there.
         out = self.tools["db_query"]("SELECT 1")
         self.assertNotIn("REFUSED", out)
@@ -135,13 +135,13 @@ class TestRunHelper(unittest.TestCase):
     def setUp(self):
         self.m = load_server(ROOT)
 
-    def test_a_missing_dx_is_reported_not_silently_empty(self):
-        old = self.m.DX
-        self.m.DX = "/nonexistent/dx"
+    def test_a_missing_ssmd_is_reported_not_silently_empty(self):
+        old = self.m.SSMD
+        self.m.SSMD = "/nonexistent/ssmd"
         try:
             out = self.m._run(["describe"], timeout=5)
         finally:
-            self.m.DX = old
+            self.m.SSMD = old
         self.assertIn("ERROR", out)
 
     def test_a_failure_carries_its_exit_code(self):
@@ -160,17 +160,17 @@ class TestRunHelper(unittest.TestCase):
             self.assertIn("omitted", out, "truncation must announce itself")
 
     def test_a_timeout_reads_as_a_timeout_not_a_failure(self):
-        # Point _run at sleep rather than at a dx verb: a dx command without a
+        # Point _run at sleep rather than at a ssmd verb: a ssmd command without a
         # running stack fails in milliseconds, so it would never time out and
         # the test would pass for the wrong reason.
-        old = self.m.DX
-        self.m.DX = "/bin/sleep"
+        old = self.m.SSMD
+        self.m.SSMD = "/bin/sleep"
         try:
             out = self.m._run(["5"], timeout=1)
         finally:
-            self.m.DX = old
+            self.m.SSMD = old
         self.assertIn("TIMEOUT", out)
-        self.assertIn("dx_status", out, "and says what to do instead of retrying")
+        self.assertIn("ssmd_status", out, "and says what to do instead of retrying")
 
 
 if __name__ == "__main__":

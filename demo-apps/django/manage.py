@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Run it through the container, always:  dx manage <command>
+"""Run it through the container, always:  ssmd manage <command>
 
 On the host it reads no database configuration at all and reports a connection
 error rather than saying what actually went wrong.

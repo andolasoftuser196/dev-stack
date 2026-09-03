@@ -8,9 +8,9 @@
 # Committed. Two developers with the same file get the same environment.
 # Machine-specific values go in hosts.yml; secrets go in .env.
 #
-# Edit and the next dx command re-imports automatically. Or, without editing:
-#     dx config set runtime.version 8.4
-#     dx config get runtime.version
+# Edit and the next ssmd command re-imports automatically. Or, without editing:
+#     ssmd config set runtime.version 8.4
+#     ssmd config get runtime.version
 
 # ── identity ────────────────────────────────────────────────────────────────
 # Prefixes every container, network, volume and compose project, and seeds the
@@ -30,7 +30,7 @@ repo:
 
 # ── application runtime ─────────────────────────────────────────────────────
 # `kind` selects a module under runtimes/. Adding a language means adding a
-# directory there, not editing dx.
+# directory there, not editing ssmd.
 runtime:
   kind: frankenphp          # frankenphp | node | python | go
   version: "8.3"

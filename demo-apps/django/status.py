@@ -1,4 +1,4 @@
-"""The dx demo status probe, shared by every Python demo app.
+"""The ssmd demo status probe, shared by every Python demo app.
 
 TCP reachability rather than a driver per service: importing psycopg, redis and
 an SMTP client only to answer "is it reachable" would make the demo's dependency
@@ -23,10 +23,10 @@ def reachable(host: str, port: int, timeout: float = 5.0) -> bool:
 def status(framework: str) -> str:
     e = os.environ
     lines = [
-        "dx demo app",
+        "ssmd demo app",
         "runtime=%s framework=%s version=%d.%d.%d"
-        % (e.get("DX_RUNTIME", "python"), framework, *sys.version_info[:3]),
-        "instance=%s" % e.get("DX_INSTANCE", "main"),
+        % (e.get("SSMD_RUNTIME", "python"), framework, *sys.version_info[:3]),
+        "instance=%s" % e.get("SSMD_INSTANCE", "main"),
     ]
 
     db = e.get("DB_DATABASE")

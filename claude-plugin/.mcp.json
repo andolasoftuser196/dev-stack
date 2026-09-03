@@ -1,11 +1,11 @@
 {
   "mcpServers": {
-    "dx-devstack": {
+    "ssmd-devstack": {
       "command": "python3",
       "args": ["${CLAUDE_PLUGIN_ROOT}/../mcp/server.py"],
       "env": {
-        "DX_ROOT": "${CLAUDE_PLUGIN_ROOT}/..",
-        "DX_ACTOR": "claude-code"
+        "SSMD_ROOT": "${CLAUDE_PLUGIN_ROOT}/..",
+        "SSMD_ACTOR": "claude-code"
       }
     }
   }

@@ -1,11 +1,11 @@
 # lib/yaml.awk - read the config seed files under config/.
 #
-# Why not yq, python or ruby: `dx` is the thing you reach for when the stack is
+# Why not yq, python or ruby: `ssmd` is the thing you reach for when the stack is
 # already broken, and every runtime dependency is one more way for it to be
 # broken too. The driver has to keep working on a box with nothing but bash,
 # docker and a shell - which is exactly the box you are on when it matters.
 #
-# Two consumers: `dx config import` (mode=dotted) turns a seed file into rows for
+# Two consumers: `ssmd config import` (mode=dotted) turns a seed file into rows for
 # the SQLite config store, and the resolver (mode=shell) turns the resolved
 # result back into a sourceable cache. One traversal, two renderings.
 #
@@ -60,7 +60,7 @@ function shquote(s) {
 
 # Two output shapes from one traversal:
 #
-#   mode=shell   (default)  STACK_RUNTIME_KIND='frankenphp'   -> sourced by dx
+#   mode=shell   (default)  STACK_RUNTIME_KIND='frankenphp'   -> sourced by ssmd
 #   mode=dotted             runtime.kind<TAB>frankenphp       -> imported into
 #                                                                the config table
 #
