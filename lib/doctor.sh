@@ -41,7 +41,7 @@ cmd_preflight() {
     done
 
     [ -f .env ] && _pf_ok ".env present" || _pf_warn ".env missing - defaults will be used (cp .env.example .env)"
-    _pf_ok "stack.yml compiles ($(grep -c . "$STACK_CACHE") settings)"
+    _pf_ok "stack.yml compiles ($(grep -c . "$CONFIG_CACHE") settings)"
 
     [ -d "$APP_DIR" ] && _pf_ok "repo.root -> $APP_DIR" \
         || _pf_fail "repo.root '$STACK_REPO_ROOT' does not resolve to a directory"
