@@ -6,7 +6,7 @@
 ## Checks
 
 - [ ] `tests/run` passes
-- [ ] `bash -n dx lib/*.sh runtimes/*/commands.sh` is clean
+- [ ] `bash -n ssmd lib/*.sh runtimes/*/commands.sh` is clean
 - [ ] a test covers the bug this fixes, or the behaviour this adds
 - [ ] no configuration value was written into code - new values went into
       `config/defaults.yml` and are read with `_cfg`

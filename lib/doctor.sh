@@ -2,9 +2,9 @@
 #
 # Three read-only commands that answer three different questions:
 #
-#   dx preflight   "will `dx up` work on this machine?"      - host, before start
-#   dx doctor      "does reality match what dx thinks?"      - drift, any time
-#   dx verify      "is the app actually working right now?"  - behaviour, after start
+#   ssmd preflight   "will `ssmd up` work on this machine?"      - host, before start
+#   ssmd doctor      "does reality match what ssmd thinks?"      - drift, any time
+#   ssmd verify      "is the app actually working right now?"  - behaviour, after start
 #
 # Keeping them separate matters. Merging them produces a command that is too slow
 # to run casually and too vague to act on, and the first thing anyone does with
@@ -49,7 +49,7 @@ cmd_preflight() {
     if [ -d "$GIT_ROOT/.git" ] || git -C "$GIT_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
         _pf_ok "git repository at $GIT_ROOT"
     else
-        _pf_warn "no git repository at $GIT_ROOT - 'dx wt' and 'dx agent' need one"
+        _pf_warn "no git repository at $GIT_ROOT - 'ssmd wt' and 'ssmd agent' need one"
     fi
 
     # DNS. Failing here is usually fine and saying so plainly saves a support
@@ -68,7 +68,7 @@ cmd_preflight() {
     if getent hosts "wildcard-probe-$$.$STACK_DOMAIN" >/dev/null 2>&1; then
         _pf_ok "wildcard *.$STACK_DOMAIN resolves - instance subdomains work automatically"
     else
-        _pf_warn "wildcard *.$STACK_DOMAIN does not resolve - each 'dx wt add' will
+        _pf_warn "wildcard *.$STACK_DOMAIN does not resolve - each 'ssmd wt add' will
              print a hosts line to add. Point *.$STACK_DOMAIN at this machine
              (dnsmasq, or your router's DNS) to skip that."
     fi
@@ -89,7 +89,7 @@ cmd_preflight() {
                     _pf_ok "port $p held by this stack ($owner)"
                 else
                     # Someone else's container. On the derived ports this cannot
-                    # happen; on 80/443 it happens constantly, because every dx
+                    # happen; on 80/443 it happens constantly, because every ssmd
                     # stack wants them and only one can have them.
                     _pf_fail "port $p held by '$owner', which belongs to a different stack.
              Only one stack can own $p. Stop that one, or set
@@ -118,7 +118,7 @@ cmd_preflight() {
 
     docker image inspect "$APP_IMAGE" >/dev/null 2>&1 \
         && _pf_ok "app image $APP_IMAGE built" \
-        || _pf_warn "app image $APP_IMAGE not built - 'dx up' will build it (first build takes a few minutes)"
+        || _pf_warn "app image $APP_IMAGE not built - 'ssmd up' will build it (first build takes a few minutes)"
 
     # Disk. The image build plus a database import is a couple of GB, and running
     # out mid-build leaves a half-built image and a confusing error.
@@ -153,7 +153,7 @@ cmd_preflight() {
     return 0
 }
 
-# ── doctor: drift between dx's model and reality ────────────────────────────
+# ── doctor: drift between ssmd's model and reality ────────────────────────────
 # Read-only, always. The reference implementation this borrows from made the same
 # choice and it was right: an auto-fixing doctor is a doctor people stop trusting,
 # because you can no longer tell what it changed while you were reading its output.
@@ -164,7 +164,7 @@ cmd_doctor() {
 
     # 1. Services the profile set says should be running.
     local want p svc
-    want="$(profiles_for_services) $(profiles_for_preset "${DX_PRESET:-default}")"
+    want="$(profiles_for_services) $(profiles_for_preset "${SSMD_PRESET:-default}")"
     for svc in app $( [ "$DB_ENGINE" != none ] && echo "$DB_ENGINE" ) \
                $( [ "$CACHE_ENGINE" != none ] && echo "$CACHE_ENGINE" ); do
         if container_running "$svc"; then
@@ -173,10 +173,10 @@ cmd_doctor() {
             case "$health" in
                 healthy|none) _pf_ok "$svc running${health:+ ($health)}" ;;
                 starting)     _pf_warn "$svc still starting" ;;
-                *)            _pf_fail "$svc running but $health - dx logs $svc" ;;
+                *)            _pf_fail "$svc running but $health - ssmd logs $svc" ;;
             esac
         else
-            _pf_fail "$svc not running - dx up"
+            _pf_fail "$svc not running - ssmd up"
         fi
     done
 
@@ -198,12 +198,12 @@ cmd_doctor() {
         local row
         for row in "${rows[@]}"; do
             [ -z "$row" ] && continue
-            IFS="$DX_FS" read -r slug kind branch wtpath dbname <<< "$row"
+            IFS="$SSMD_FS" read -r slug kind branch wtpath dbname <<< "$row"
             local prefix="${PROJECT}-${kind}-${slug}"
             docker ps --format '{{.Names}}' | grep -q "^${prefix}-" \
                 || _pf_warn "$kind/$slug: registered but no container running"
             [ -d "$wtpath" ] \
-                || _pf_fail "$kind/$slug: worktree $wtpath is gone (registry stale - dx $kind rm $slug)"
+                || _pf_fail "$kind/$slug: worktree $wtpath is gone (registry stale - ssmd $kind rm $slug)"
             [ -f "caddy/proxy/sites/${slug}.caddy" ] \
                 || _pf_warn "$kind/$slug: no proxy route - https://${slug}.${STACK_DOMAIN} will 404"
             if [ "$DB_ENGINE" != none ] && container_running "$DB_ENGINE"; then
@@ -229,9 +229,9 @@ cmd_doctor() {
     # 4. Leases that have outlived their TTL. An agent that crashed holds its
     #    sandbox forever otherwise, and the slot count is a hard limit.
     local lrow lslug lmin
-    while IFS="$DX_FS" read -r lslug lmin; do
+    while IFS="$SSMD_FS" read -r lslug lmin; do
         [ -z "$lslug" ] && continue
-        _pf_warn "lease on '$lslug' expired ${lmin}m ago - dx agent reap"
+        _pf_warn "lease on '$lslug' expired ${lmin}m ago - ssmd agent reap"
     done < <(printf "SELECT slug, (strftime('%%s','now') - expires)/60 FROM leases WHERE expires < strftime('%%s','now');" | sq)
 
     declare -F rt_doctor_notes >/dev/null && rt_doctor_notes
@@ -317,7 +317,7 @@ cmd_verify() {
              '${STACK_NAME}-dev' network."
         fi
         local n; n="$(db_table_count 2>/dev/null)"
-        [ "${n:-0}" -gt 0 ] && _pf_ok "database has $n tables" || _pf_fail "database has no tables - dx db:migrate"
+        [ "${n:-0}" -gt 0 ] && _pf_ok "database has $n tables" || _pf_fail "database has no tables - ssmd db:migrate"
     fi
 
     # 4. Errors since the last verify. This is the highest-value check for an
@@ -351,7 +351,7 @@ cmd_verify() {
 # ── status / urls ───────────────────────────────────────────────────────────
 cmd_status() {
     printf '%-28s %-12s %-10s %s\n' NAME STATE HEALTH PORTS
-    docker ps -a --filter "label=dx.stack=${STACK_NAME}" \
+    docker ps -a --filter "label=ssmd.stack=${STACK_NAME}" \
         --format '{{.Names}}\t{{.State}}\t{{.Status}}\t{{.Ports}}' 2>/dev/null \
     | while IFS=$'\t' read -r n s st p; do
         local h=-
@@ -385,10 +385,10 @@ EOF
     [ "$CACHE_ENGINE" != none ] && echo "  ${CACHE_ENGINE}     ${CACHE_BIND}:${CACHE_PORT}"
 
     local n; n="$(instances_count 2>/dev/null || echo 0)"
-    [ "${n:-0}" -gt 0 ] && { echo; echo "  ${n} instance(s) running - dx wt ls"; }
+    [ "${n:-0}" -gt 0 ] && { echo; echo "  ${n} instance(s) running - ssmd wt ls"; }
 
     echo
-    echo "Certificate warning in the browser?  dx ca-cert"
+    echo "Certificate warning in the browser?  ssmd ca-cert"
 }
 
 cmd_describe() {

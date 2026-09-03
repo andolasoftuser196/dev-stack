@@ -18,7 +18,7 @@ report is valid you will be credited in the advisory unless you ask not to be.
 
 ## What this project is
 
-dx is a **local development** toolkit. It stands up a Docker environment on a
+ssmd is a **local development** toolkit. It stands up a Docker environment on a
 developer machine: a web runtime, a database, a cache, a mail catcher, a front
 proxy with a locally-trusted CA, and optionally a sandboxed container for a
 coding agent.
@@ -46,15 +46,15 @@ Reports are most useful where a documented boundary does not hold:
 - **The policy layer.** `policy/denied-commands.tsv`, `policy/denied-paths.tsv`
   and `lib/policy.sh`. A command that should be refused and is not - in
   particular anything that destroys data without a snapshot - is in scope.
-- **Destructive-operation guards.** `dx test` refusing a non-disposable database
+- **Destructive-operation guards.** `ssmd test` refusing a non-disposable database
   name, and `lib/db.sh` snapshotting before every destructive operation and
   aborting if the snapshot fails. A bypass of either is in scope.
 - **Non-root containers.** No image bakes in a UID and `user:` comes from
   `HOST_UID`/`HOST_GID`. A path to root inside a container, or to writing host
   files as root, is in scope.
-- **Secret handling.** dx keeps secrets in `.env`, never in the config database,
-  and `.gitignore` excludes `.env`, `config/dx.db` and all of `data/`. A secret
-  leaking into the database, the audit log, `dx describe`, `dx doctor` output or
+- **Secret handling.** ssmd keeps secrets in `.env`, never in the config database,
+  and `.gitignore` excludes `.env`, `config/ssmd.db` and all of `data/`. A secret
+  leaking into the database, the audit log, `ssmd describe`, `ssmd doctor` output or
   a committed file is in scope.
 - **The MCP server and the Claude Code hooks.** `mcp/server.py` and
   `claude-plugin/hooks/`. A destructive operation reachable without an explicit
@@ -81,21 +81,21 @@ These are known, documented properties rather than defects.
 - **The Claude Code write-boundary hook.** It constrains Claude Code's tools and
   nothing else. A shell command that writes elsewhere is not stopped by it -
   the read-only mount is what stops that.
-- **`dx agent diff` returning a verdict rather than refusing.** The review gate
+- **`ssmd agent diff` returning a verdict rather than refusing.** The review gate
   holds; it does not block. That is deliberate - see `docs/AGENTS.md`.
-- **Development-grade defaults** in the services dx starts, on a machine where
+- **Development-grade defaults** in the services ssmd starts, on a machine where
   the developer already has root.
 - Vulnerabilities in upstream images or language dependencies. Report those
-  upstream; if dx pins something outdated, a normal issue is the right venue.
+  upstream; if ssmd pins something outdated, a normal issue is the right venue.
 
 ## If an agent misbehaves
 
 Stop the run and treat it as a prompt-injection incident until proven otherwise.
-`dx agent audit` and `data/state/agent-tools.jsonl` record what was attempted and
+`ssmd agent audit` and `data/state/agent-tools.jsonl` record what was attempted and
 what was refused, which is where the reconstruction starts. The procedure is at
 the end of [`docs/AGENTS.md`](docs/AGENTS.md).
 
 ## Supported versions
 
-dx is developed on `main`, and fixes land there. There are no maintained release
+ssmd is developed on `main`, and fixes land there. There are no maintained release
 branches.

@@ -1,15 +1,15 @@
 {
-  "name": "dx-devstack",
-  "displayName": "dx dev-stack",
+  "name": "ssmd-devstack",
+  "displayName": "ssmd dev-stack",
   "version": "1.0.0",
-  "description": "Operate a dx development environment: run it, debug it, run branches in parallel, and give coding agents isolated sandboxes with policy guardrails.",
-  "keywords": ["docker", "devstack", "dx", "worktree", "agent-sandbox", "local-development"],
+  "description": "Operate a ssmd development environment: run it, debug it, run branches in parallel, and give coding agents isolated sandboxes with policy guardrails.",
+  "keywords": ["docker", "devstack", "ssmd", "worktree", "agent-sandbox", "local-development"],
   "license": "MIT",
   "userConfig": {
-    "dx_root": {
+    "ssmd_root": {
       "type": "string",
       "title": "dev-stack directory",
-      "description": "Absolute path to the dev-stack directory containing the dx script. Leave blank to search upward from the project root."
+      "description": "Absolute path to the dev-stack directory containing the ssmd script. Leave blank to search upward from the project root."
     }
   }
 }

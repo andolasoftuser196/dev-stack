@@ -3,20 +3,20 @@
 #
 # Two things bite Laravel projects specifically:
 #
-#   APP_KEY comes from the app's own .env, not from here. dx does not set it,
+#   APP_KEY comes from the app's own .env, not from here. ssmd does not set it,
 #   because an imported database's encrypted columns were encrypted under a
 #   particular key and changing it makes every read of them throw. Generate it
-#   once with `dx run 'php artisan key:generate'`, then leave it alone.
+#   once with `ssmd run 'php artisan key:generate'`, then leave it alone.
 #
 #   The queue worker caches the booted framework. A code change reaches the web
-#   process immediately and the worker never - `dx recreate queue` after any
+#   process immediately and the worker never - `ssmd recreate queue` after any
 #   change a job executes.
 #
 # repo.root already points at the matching demo application, so this runs as-is
 # from a fresh clone:
 #
 #     cp examples/runtimes/frankenphp-laravel.stack.yml config/stack.yml
-#     dx config import && dx up core && dx urls
+#     ssmd config import && ssmd up core && ssmd urls
 #
 # For a real project, change repo.root and repo.git_root to point at it.
 
@@ -65,7 +65,7 @@ tools:
   mcp: true
 
 hooks:
-  # Dependencies are not listed here. `dx up` installs them through the runtime
+  # Dependencies are not listed here. `ssmd up` installs them through the runtime
   # module, which knows the right command for the package manager in use and
   # what to do when there is no lockfile yet. Put project-specific one-time
   # setup here instead.

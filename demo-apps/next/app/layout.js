@@ -1,4 +1,4 @@
-export const metadata = { title: 'dx demo' };
+export const metadata = { title: 'ssmd demo' };
 
 export default function RootLayout({ children }) {
   return (

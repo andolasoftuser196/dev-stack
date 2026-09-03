@@ -2,7 +2,7 @@
 """Stop - if code changed and nothing verified it, say so before the turn ends.
 
 The cheapest possible quality control: a turn that edited application code and
-never ran `dx verify` or `dx test` has produced an unverified claim, and the
+never ran `ssmd verify` or `ssmd test` has produced an unverified claim, and the
 moment to notice is before the human reads the summary, not after they deploy it.
 
 It does not block. Exit 2 would force another turn, and forcing a verify on a
@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from dx_common import find_dx_root, passthrough, read_input  # noqa: E402
+from ssmd_common import find_ssmd_root, passthrough, read_input  # noqa: E402
 
 # Extensions that mean "application behaviour may have changed". Deliberately
 # excludes docs, config-as-data and lockfiles: those need review, not a health
@@ -29,8 +29,8 @@ CODE_SUFFIXES = {".php", ".py", ".go", ".js", ".ts", ".jsx", ".tsx", ".vue",
 
 def main() -> None:
     data = read_input()
-    dx_root = find_dx_root(data.get("cwd"))
-    if dx_root is None:
+    ssmd_root = find_ssmd_root(data.get("cwd"))
+    if ssmd_root is None:
         passthrough()
 
     transcript = data.get("transcript_path")
@@ -58,7 +58,7 @@ def main() -> None:
                             edited.add(p)
                     elif name == "Bash":
                         c = inp.get("command", "")
-                        if "dx verify" in c or "dx test" in c:
+                        if "ssmd verify" in c or "ssmd test" in c:
                             verified = True
     except OSError:
         passthrough()
@@ -73,8 +73,8 @@ def main() -> None:
             "hookEventName": "Stop",
             "additionalContext": (
                 f"This turn changed application code ({sample}{more}) but never ran "
-                f"`./dx verify` or `./dx test`.\n\n"
-                f"`dx verify` is cheap and checks for new errors in the log since "
+                f"`./ssmd verify` or `./ssmd test`.\n\n"
+                f"`ssmd verify` is cheap and checks for new errors in the log since "
                 f"the last run - which is the only thing that answers whether this "
                 f"change broke something. Either run it, or state plainly in your "
                 f"summary that the change is unverified. Do not describe it as "

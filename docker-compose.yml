@@ -1,5 +1,5 @@
 # Base stack. Every service except the proxy and the app sits behind a profile,
-# and dx computes the profile set from stack.yml - so this one file serves a
+# and ssmd computes the profile set from stack.yml - so this one file serves a
 # PHP+MySQL project and a Go+Postgres project without a conditional in sight.
 #
 # Every value here is an interpolation. Not one image tag, port or tuning
@@ -7,15 +7,15 @@
 # lib/core.sh. Adding a literal to this file is a bug: put it in
 # config/defaults.yml instead.
 #
-# Run it through `dx`, never `docker compose` directly: compose alone does not
+# Run it through `ssmd`, never `docker compose` directly: compose alone does not
 # know HOST_UID/HOST_GID, the profile set the configuration implies, the derived
 # port offset, or any of the post-start work. A raw `docker compose up` here starts a
 # subtly different stack, and the difference shows up hours later as a
 # permissions error on a file the app wrote.
 
 x-labels: &labels
-  dx.stack: "${STACK_NAME}"
-  dx.managed: "true"
+  ssmd.stack: "${STACK_NAME}"
+  ssmd.managed: "true"
 
 # The app, its queue worker and its scheduler are the same image with the same
 # mounts and a different command. Anchoring that shape means a change to the
@@ -35,37 +35,37 @@ x-app-base: &app-base
       AIR_VERSION: "${STACK_GO_TOOLS_AIR}"
       DELVE_VERSION: "${STACK_GO_TOOLS_DELVE}"
       STATICCHECK_VERSION: "${STACK_GO_TOOLS_STATICCHECK}"
-  # No UID baked into the image - it runs as whoever invoked dx, so files it
-  # writes into the bind-mounted repo stay editable on the host. `?run via dx`
+  # No UID baked into the image - it runs as whoever invoked ssmd, so files it
+  # writes into the bind-mounted repo stay editable on the host. `?run via ssmd`
   # is the guard that makes a stray `docker compose up` fail loudly instead of
   # silently starting everything as root.
-  user: "${HOST_UID:?run dx, not docker compose}:${HOST_GID:?run dx, not docker compose}"
+  user: "${HOST_UID:?run ssmd, not docker compose}:${HOST_GID:?run ssmd, not docker compose}"
   working_dir: /app
   init: true
   environment:
-    DX_STACK: "${STACK_NAME}"
-    DX_DOMAIN: "${STACK_DOMAIN}"
-    DX_RUNTIME: "${STACK_RUNTIME_KIND}"
-    DX_FRAMEWORK: "${STACK_RUNTIME_FRAMEWORK}"
-    DX_DOCROOT: "${STACK_RUNTIME_DOCROOT}"
-    DX_PORT: "${STACK_RUNTIME_PORT}"
+    SSMD_STACK: "${STACK_NAME}"
+    SSMD_DOMAIN: "${STACK_DOMAIN}"
+    SSMD_RUNTIME: "${STACK_RUNTIME_KIND}"
+    SSMD_FRAMEWORK: "${STACK_RUNTIME_FRAMEWORK}"
+    SSMD_DOCROOT: "${STACK_RUNTIME_DOCROOT}"
+    SSMD_PORT: "${STACK_RUNTIME_PORT}"
     # The inner port the app process itself listens on, behind the runtime's
     # Caddy. Irrelevant to frankenphp (Caddy *is* the runtime) and load-bearing
     # for node/python/go.
-    DX_APP_PORT: "${DX_APP_PORT}"
-    DX_HEALTHZ: "${STACK_RUNTIME_HEALTHZ}"
-    DX_INSTANCE: "main"
+    SSMD_APP_PORT: "${SSMD_APP_PORT}"
+    SSMD_HEALTHZ: "${STACK_RUNTIME_HEALTHZ}"
+    SSMD_INSTANCE: "main"
     # Per-instance python venv. Ignored by the other runtimes.
-    DX_VENV: "/dx/cache/venv/main"
+    SSMD_VENV: "/ssmd/cache/venv/main"
     # Command overrides from config (commands.*). Empty unless set; each
     # runtime falls back to what runtime.framework implies.
-    DX_START_CMD: "${STACK_COMMANDS_START}"
-    DX_QUEUE_CMD: "${STACK_COMMANDS_QUEUE}"
-    DX_SCHEDULE_CMD: "${STACK_COMMANDS_SCHEDULE}"
-    DX_ASGI_APP: "${STACK_COMMANDS_ASGI_APP}"
-    DX_WSGI_APP: "${STACK_COMMANDS_WSGI_APP}"
-    DX_CELERY_APP: "${STACK_COMMANDS_CELERY_APP}"
-    DX_SETTINGS_MODULE: "${STACK_COMMANDS_SETTINGS_MODULE}"
+    SSMD_START_CMD: "${STACK_COMMANDS_START}"
+    SSMD_QUEUE_CMD: "${STACK_COMMANDS_QUEUE}"
+    SSMD_SCHEDULE_CMD: "${STACK_COMMANDS_SCHEDULE}"
+    SSMD_ASGI_APP: "${STACK_COMMANDS_ASGI_APP}"
+    SSMD_WSGI_APP: "${STACK_COMMANDS_WSGI_APP}"
+    SSMD_CELERY_APP: "${STACK_COMMANDS_CELERY_APP}"
+    SSMD_SETTINGS_MODULE: "${STACK_COMMANDS_SETTINGS_MODULE}"
     XDEBUG_MODE: "${XDEBUG_MODE}"
     # Read by php.dev.ini through ${...} interpolation, so a limit change is a
     # config change rather than an image rebuild. Harmless to the other runtimes.
@@ -77,7 +77,7 @@ x-app-base: &app-base
     PHP_OPCACHE_MEMORY: "${PHP_OPCACHE_MEMORY}"
     PHP_OPCACHE_FILES: "${PHP_OPCACHE_FILES}"
     PHP_TIMEZONE: "${PHP_TIMEZONE}"
-    DX_REQUEST_BODY_MAX: "${PHP_REQUEST_BODY}"
+    SSMD_REQUEST_BODY_MAX: "${PHP_REQUEST_BODY}"
     # Connection details are injected as process environment rather than written
     # into the app's own .env, because process env wins in every runtime we
     # support and because a dev stack that edits the repo's .env is a dev stack
@@ -117,8 +117,8 @@ x-app-base: &app-base
     # what lets server-side HTTP calls to https://*.${STACK_DOMAIN} validate
     # instead of failing with an unknown-authority error that reads like a bug in
     # the app.
-    - ./data/proxy/caddy/pki/authorities/local:/dx/ca:ro
-    - ./data/build-cache:/dx/cache
+    - ./data/proxy/caddy/pki/authorities/local:/ssmd/ca:ro
+    - ./data/build-cache:/ssmd/cache
   networks: [ default ]
   labels: *labels
 
@@ -202,9 +202,9 @@ services:
     container_name: "${STACK_NAME}-dev-queue"
     profiles: [ "queue" ]
     restart: unless-stopped
-    command: [ "dx-entrypoint", "queue" ]
+    command: [ "ssmd-entrypoint", "queue" ]
     environment:
-      DX_ROLE: "queue"
+      SSMD_ROLE: "queue"
       WORKER_MAX_RUNTIME: "${WORKER_MAX_RUNTIME}"
       QUEUE_TRIES: "${QUEUE_TRIES}"
       QUEUE_TIMEOUT: "${QUEUE_TIMEOUT}"
@@ -216,9 +216,9 @@ services:
     container_name: "${STACK_NAME}-dev-scheduler"
     profiles: [ "scheduler" ]
     restart: unless-stopped
-    command: [ "dx-entrypoint", "scheduler" ]
+    command: [ "ssmd-entrypoint", "scheduler" ]
     environment:
-      DX_ROLE: "scheduler"
+      SSMD_ROLE: "scheduler"
     depends_on:
       app: { condition: service_started }
 
@@ -420,22 +420,22 @@ services:
     ipc: host
     user: "${HOST_UID}:${HOST_GID}"
     working_dir: /work
-    command: [ "/dx/browser-entrypoint.sh" ]
+    command: [ "/ssmd/browser-entrypoint.sh" ]
     environment:
-      DX_DOMAIN: "${STACK_DOMAIN}"
+      SSMD_DOMAIN: "${STACK_DOMAIN}"
       SCREEN: "${TUNE_BROWSER_SCREEN}"
       NOVNC_PORT: "${PORT_BROWSER_NOVNC}"
       VNC_PORT: "${PORT_BROWSER_VNC}"
     volumes:
-      - ./agent/sandbox/browser-entrypoint.sh:/dx/browser-entrypoint.sh:ro
+      - ./agent/sandbox/browser-entrypoint.sh:/ssmd/browser-entrypoint.sh:ro
       - "${APP_DIR}:/work"
       - ./data/state/browser:/home/pwuser
-      - ./data/proxy/caddy/pki/authorities/local:/dx/ca:ro
+      - ./data/proxy/caddy/pki/authorities/local:/ssmd/ca:ro
     networks: [ no-egress ]
     labels: *labels
 
   # ── stack-control MCP server (profile: mcp) ───────────────────────────────
-  # Exposes dx to Claude Code as tools. It mounts the docker socket, which makes
+  # Exposes ssmd to Claude Code as tools. It mounts the docker socket, which makes
   # it host-root-equivalent. That is irreducible - managing containers is the
   # job - and it is why it binds to loopback and sits behind a profile rather
   # than being on by default.
@@ -444,14 +444,14 @@ services:
     container_name: "${STACK_NAME}-dev-mcp"
     profiles: [ "mcp" ]
     restart: unless-stopped
-    working_dir: /dx
-    command: [ "sh", "-c", "pip install --quiet --no-cache-dir -r /dx/mcp/requirements.txt && python /dx/mcp/server.py --http --port ${PORT_MCP_INTERNAL}" ]
+    working_dir: /ssmd
+    command: [ "sh", "-c", "pip install --quiet --no-cache-dir -r /ssmd/mcp/requirements.txt && python /ssmd/mcp/server.py --http --port ${PORT_MCP_INTERNAL}" ]
     environment:
-      DX_ROOT: /dx
-      DX_ACTOR: "mcp"
+      SSMD_ROOT: /ssmd
+      SSMD_ACTOR: "mcp"
     ports: [ "127.0.0.1:${MCP_PORT}:${PORT_MCP_INTERNAL}" ]
     volumes:
-      - .:/dx
+      - .:/ssmd
       - /var/run/docker.sock:/var/run/docker.sock
     networks: [ default ]
     labels: *labels

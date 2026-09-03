@@ -1,6 +1,6 @@
 # tests/lib.sh - the test harness.
 #
-# Hand-rolled rather than bats, for the same reason dx has no runtime
+# Hand-rolled rather than bats, for the same reason ssmd has no runtime
 # dependencies: the tests have to run on the machine where something is already
 # broken, and "install bats first" is a poor answer there. It is ~120 lines and
 # it does the four things a shell test harness actually needs - compare, report,
@@ -118,28 +118,28 @@ export TEST_ROOT
 # quickly. data/ and the existing database are excluded so every sandbox starts
 # from the seeds alone.
 mk_sandbox() {
-    local d; d="$(mktemp -d "${TMPDIR:-/tmp}/dxtest.XXXXXX")"
+    local d; d="$(mktemp -d "${TMPDIR:-/tmp}/ssmdtest.XXXXXX")"
     tar -C "$TEST_ROOT" \
         --exclude=./data --exclude=./.git --exclude=./tests \
-        --exclude=./config/dx.db --exclude=./config/dx.db-wal --exclude=./config/dx.db-shm \
+        --exclude=./config/ssmd.db --exclude=./config/ssmd.db-wal --exclude=./config/ssmd.db-shm \
         --exclude=./.stack.env --exclude=./scaffold/.venv --exclude=__pycache__ \
         -cf - . 2>/dev/null | tar -C "$d" -xf -
     printf '%s' "$d"
 }
 
-# Source the config layer against a sandbox. Returns with DX_ROOT/DX_DB_PATH set
-# and the configuration resolved, exactly as dx would have them.
+# Source the config layer against a sandbox. Returns with SSMD_ROOT/SSMD_DB_PATH set
+# and the configuration resolved, exactly as ssmd would have them.
 load_sandbox() {  # <sandbox-dir> [host-profile]
-    export DX_ROOT="$1"
-    cd "$DX_ROOT" || return 1
-    export DX_HOST="${2:-local}"
-    export DX_ACTOR="test"
+    export SSMD_ROOT="$1"
+    cd "$SSMD_ROOT" || return 1
+    export SSMD_HOST="${2:-local}"
+    export SSMD_ACTOR="test"
     # shellcheck disable=SC1090
-    . "$DX_ROOT/lib/core.sh"; . "$DX_ROOT/lib/sqlite.sh"; . "$DX_ROOT/lib/config.sh"
+    . "$SSMD_ROOT/lib/core.sh"; . "$SSMD_ROOT/lib/sqlite.sh"; . "$SSMD_ROOT/lib/config.sh"
     set +e                        # core.sh turns on errexit; assertions need it off
     load_config
-    load_runtime          # defines the rt_* functions, exactly as dx does
-    for m in db instance worktree agent policy doctor; do . "$DX_ROOT/lib/$m.sh"; done
+    load_runtime          # defines the rt_* functions, exactly as ssmd does
+    for m in db instance worktree agent policy doctor; do . "$SSMD_ROOT/lib/$m.sh"; done
     set +e
 }
 

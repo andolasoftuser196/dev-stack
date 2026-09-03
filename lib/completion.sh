@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Shell completion for dx. Emitted to stdout for eval:
-#   eval "$(dx completion bash)"      # or add to ~/.bashrc
+# Shell completion for ssmd. Emitted to stdout for eval:
+#   eval "$(ssmd completion bash)"      # or add to ~/.bashrc
 set -euo pipefail
 
 case "${1:-bash}" in
 bash)
 cat <<'BASH'
-_dx_complete() {
+_ssmd_complete() {
     local cur prev words cword
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
@@ -16,17 +16,17 @@ _dx_complete() {
                db:snapshot db:snapshots db:restore db:import db:drop wt agent browse
                ca-cert debug fix-perms mcp:install audit policy config completion help"
 
-    # Slugs come from the registry, so completing `dx wt rm <TAB>` offers what
+    # Slugs come from the registry, so completing `ssmd wt rm <TAB>` offers what
     # actually exists. Silent on failure: a broken completion must never be the
     # reason a shell feels broken.
     local slugs=""
-    if command -v sqlite3 >/dev/null 2>&1 && [ -f config/dx.db ]; then
-        slugs="$(sqlite3 -batch -noheader config/dx.db 'SELECT slug FROM instances;' 2>/dev/null | tr '\n' ' ')"
+    if command -v sqlite3 >/dev/null 2>&1 && [ -f config/ssmd.db ]; then
+        slugs="$(sqlite3 -batch -noheader config/ssmd.db 'SELECT slug FROM instances;' 2>/dev/null | tr '\n' ' ')"
     fi
     local services="app queue scheduler proxy mysql postgres redis mailpit minio adminer cache-ui browser mcp egress"
 
     case "$prev" in
-        dx)        COMPREPLY=($(compgen -W "$top" -- "$cur")); return ;;
+        ssmd)        COMPREPLY=($(compgen -W "$top" -- "$cur")); return ;;
         config)    COMPREPLY=($(compgen -W "list get set unset explain history import export hosts path" -- "$cur")); return ;;
         up)        COMPREPLY=($(compgen -W "core default tools full" -- "$cur")); return ;;
         wt)        COMPREPLY=($(compgen -W "add ls up stop rm logs sh exec verify" -- "$cur")); return ;;
@@ -39,7 +39,7 @@ _dx_complete() {
     esac
     COMPREPLY=($(compgen -W "$top" -- "$cur"))
 }
-complete -F _dx_complete dx ./dx
+complete -F _ssmd_complete ssmd ./ssmd
 BASH
 ;;
 zsh)
@@ -48,7 +48,7 @@ cat <<'ZSH'
 # One list to keep current is the whole reason.
 autoload -Uz +X compinit && compinit
 autoload -Uz +X bashcompinit && bashcompinit
-eval "$(dx completion bash)"
+eval "$(ssmd completion bash)"
 ZSH
 ;;
 *) echo "unknown shell '${1}'. Valid: bash zsh" >&2; exit 1 ;;

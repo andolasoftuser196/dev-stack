@@ -17,14 +17,14 @@ say() { echo "[browser] $*"; }
 # Trust the stack CA so the browser reaches https://*.<domain> without an
 # interstitial. An agent cannot click through a certificate warning, and a stack
 # where every page starts with one is a stack where nobody uses the browser.
-if [ -f /dx/ca/root.crt ]; then
+if [ -f /ssmd/ca/root.crt ]; then
     mkdir -p "$HOME/.pki/nssdb"
     if command -v certutil >/dev/null 2>&1; then
-        certutil -d "sql:$HOME/.pki/nssdb" -A -t "C,," -n dx-local -i /dx/ca/root.crt 2>/dev/null \
+        certutil -d "sql:$HOME/.pki/nssdb" -A -t "C,," -n ssmd-local -i /ssmd/ca/root.crt 2>/dev/null \
             && say "installed the stack CA into the browser's NSS database" \
             || say "could not install the CA into NSS - expect certificate warnings"
     else
-        say "certutil not present - expect certificate warnings on https://*.${DX_DOMAIN:-}"
+        say "certutil not present - expect certificate warnings on https://*.${SSMD_DOMAIN:-}"
     fi
 fi
 
@@ -49,7 +49,7 @@ say "display ${DISPLAY} at ${SCREEN}; noVNC on :7900"
 say "isolated network only - this browser reaches the app under test and nothing else"
 
 # Idle rather than exiting. Playwright specs are started against this container
-# by `dx browse` and by the project's own e2e command; staying up means the
+# by `ssmd browse` and by the project's own e2e command; staying up means the
 # display and the VNC bridge survive between runs, so a viewer does not have to
 # reconnect for each one.
 exec tail -f /dev/null

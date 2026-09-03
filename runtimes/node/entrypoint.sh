@@ -2,32 +2,32 @@
 # Node runtime entrypoint. Roles: serve | queue | scheduler | idle.
 set -eu
 
-ROLE="${1:-${DX_ROLE:-serve}}"
-: "${DX_PORT:=80}"
-: "${DX_APP_PORT:=3000}"
-: "${DX_HEALTHZ:=/healthz}"
-: "${DX_FRAMEWORK:=none}"
-export DX_PORT DX_APP_PORT DX_HEALTHZ PORT="${DX_APP_PORT}"
+ROLE="${1:-${SSMD_ROLE:-serve}}"
+: "${SSMD_PORT:=80}"
+: "${SSMD_APP_PORT:=3000}"
+: "${SSMD_HEALTHZ:=/healthz}"
+: "${SSMD_FRAMEWORK:=none}"
+export SSMD_PORT SSMD_APP_PORT SSMD_HEALTHZ PORT="${SSMD_APP_PORT}"
 
-say() { echo "[dx-entrypoint:$ROLE] $*"; }
+say() { echo "[ssmd-entrypoint:$ROLE] $*"; }
 
-# /dx/cache is a bind mount. If something created it with docker as root, this
+# /ssmd/cache is a bind mount. If something created it with docker as root, this
 # container - which runs as the invoking user - cannot write to it, and every
 # tool that wants a home directory then fails in its own confusing way. Check
 # once, here, and say what to do.
-if ! mkdir -p "$HOME" 2>/dev/null || ! touch "$HOME/.dx-writable" 2>/dev/null; then
-    say "/dx/cache is not writable by uid $(id -u) - it is probably root-owned."
-    say "  dx fix-perms      (or: sudo chown -R \$(id -u) data/build-cache)"
+if ! mkdir -p "$HOME" 2>/dev/null || ! touch "$HOME/.ssmd-writable" 2>/dev/null; then
+    say "/ssmd/cache is not writable by uid $(id -u) - it is probably root-owned."
+    say "  ssmd fix-perms      (or: sudo chown -R \$(id -u) data/build-cache)"
     exit 1
 fi
-rm -f "$HOME/.dx-writable"
+rm -f "$HOME/.ssmd-writable"
 
 mkdir -p "$HOME" "$NPM_CONFIG_CACHE" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" 2>/dev/null || true
 
-if [ -f /dx/ca/root.crt ]; then
+if [ -f /ssmd/ca/root.crt ]; then
     # Node ignores the system trust store; NODE_EXTRA_CA_CERTS is the only knob
-    # that makes https to *.$DX_DOMAIN validate from inside the app.
-    export NODE_EXTRA_CA_CERTS=/dx/ca/root.crt
+    # that makes https to *.$SSMD_DOMAIN validate from inside the app.
+    export NODE_EXTRA_CA_CERTS=/ssmd/ca/root.crt
 fi
 
 pm() {
@@ -41,11 +41,11 @@ pm() {
 }
 
 dev_cmd() {
-    case "$DX_FRAMEWORK" in
-        next)  echo "$(pm) run dev -- --port ${DX_APP_PORT} --hostname 0.0.0.0" ;;
+    case "$SSMD_FRAMEWORK" in
+        next)  echo "$(pm) run dev -- --port ${SSMD_APP_PORT} --hostname 0.0.0.0" ;;
         nest)  echo "$(pm) run start:dev" ;;
-        vite)  echo "$(pm) run dev -- --port ${DX_APP_PORT} --host 0.0.0.0" ;;
-        *)     echo "${DX_START_CMD:-$(pm) run dev}" ;;
+        vite)  echo "$(pm) run dev -- --port ${SSMD_APP_PORT} --host 0.0.0.0" ;;
+        *)     echo "${SSMD_START_CMD:-$(pm) run dev}" ;;
     esac
 }
 
@@ -57,7 +57,7 @@ dev_cmd() {
 # where flask is demonstrably installed, and the entrypoint restarts it forever.
 case "$ROLE" in
     serve)
-        say "caddy on :${DX_PORT} -> node on :${DX_APP_PORT} ($(pm), framework ${DX_FRAMEWORK})"
+        say "caddy on :${SSMD_PORT} -> node on :${SSMD_APP_PORT} ($(pm), framework ${SSMD_FRAMEWORK})"
         caddy run --config /etc/caddy/Caddyfile &
         CADDY_PID=$!
         # Restart the app process on exit but leave Caddy alone, so healthz - and
@@ -69,11 +69,11 @@ case "$ROLE" in
         done
         ;;
     queue)
-        cmd="${DX_QUEUE_CMD:-$(pm) run queue}"
+        cmd="${SSMD_QUEUE_CMD:-$(pm) run queue}"
         say "$cmd"
         while true; do sh -c "$cmd" || say "worker exited $?"; sleep 3; done ;;
     scheduler)
-        cmd="${DX_SCHEDULE_CMD:-$(pm) run schedule}"
+        cmd="${SSMD_SCHEDULE_CMD:-$(pm) run schedule}"
         while true; do sh -c "$cmd" || say "scheduler tick exited $?"; sleep 60; done ;;
     idle) exec tail -f /dev/null ;;
     *)    exec "$@" ;;

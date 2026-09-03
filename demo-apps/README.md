@@ -1,7 +1,7 @@
 # Demo applications
 
 One genuinely runnable application per allowed runtime. They exist so that
-`dx up` works the moment you clone this repository - no project of your own
+`ssmd up` works the moment you clone this repository - no project of your own
 needed - and so the integration tests can boot every runtime for real rather
 than asserting about a compose file.
 
@@ -11,7 +11,7 @@ that cannot demonstrate itself is a toolkit nobody can evaluate.
 
 ```bash
 cp examples/runtimes/go-service.stack.yml config/stack.yml
-dx config import && dx up core && dx urls
+ssmd config import && ssmd up core && ssmd urls
 ```
 
 That is the whole setup - no clone, no scaffold, no project.
@@ -21,7 +21,7 @@ That is the whole setup - no clone, no scaffold, no project.
 Each one serves a plain-text status page at `/` in exactly this shape:
 
 ```
-dx demo app
+ssmd demo app
 runtime=frankenphp framework=laravel version=8.3
 instance=main
 database=app_dev ok
@@ -32,10 +32,10 @@ storage=skipped
 
 One format, so `tests/integration/test_apps.sh` can boot all thirteen and assert
 the same things about each. `ok` means the app actually opened a connection -
-not that the container is running, which is what `dx verify` already covers.
+not that the container is running, which is what `ssmd verify` already covers.
 
 The apps deliberately do **not** serve `/healthz`. That is the web server's job
-in every dx runtime, and an application-level healthz would defeat the point:
+in every ssmd runtime, and an application-level healthz would defeat the point:
 it has to keep answering while the application is broken.
 
 Every app that has a migration tool ships one migration, and
@@ -47,10 +47,10 @@ Each app also provides, where its ecosystem has the concept:
 
 | | so that this works |
 |---|---|
-| a dependency manifest | `dx deps` |
-| one migration | `dx db:migrate` |
-| one test | `dx test` |
-| a framework CLI | `dx artisan`, `dx cake`, `dx manage`, … |
+| a dependency manifest | `ssmd deps` |
+| one migration | `ssmd db:migrate` |
+| one test | `ssmd test` |
+| a framework CLI | `ssmd artisan`, `ssmd cake`, `ssmd manage`, … |
 
 ## What is here
 
@@ -77,12 +77,12 @@ stack: real framework, real routing, real connections.
 
 ## No lockfiles
 
-A real project commits one, and `dx deps` does a frozen install from it - that is
+A real project commits one, and `ssmd deps` does a frozen install from it - that is
 the whole point of `npm ci` over `npm install`. These demos deliberately do not:
 a generated Next.js lockfile is ten thousand lines, and thirteen of them would be
 most of this repository by volume.
 
-`dx deps` detects the absence, says the result is not reproducible, and installs
+`ssmd deps` detects the absence, says the result is not reproducible, and installs
 anyway so the stack still comes up. That path exists for real projects too - a
 new project before its first lockfile hits exactly the same case, and `npm ci`'s
 own error message for it says nothing useful.

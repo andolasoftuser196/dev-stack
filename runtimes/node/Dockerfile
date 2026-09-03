@@ -1,7 +1,7 @@
 # Node runtime. The app process listens on an inner port; a small Caddy in front
-# owns $DX_PORT, answers $DX_HEALTHZ itself, and serves static files.
+# owns $SSMD_PORT, answers $SSMD_HEALTHZ itself, and serves static files.
 #
-# That front layer is why every dx runtime behaves identically: healthz keeps
+# That front layer is why every ssmd runtime behaves identically: healthz keeps
 # answering while the app process is crash-looping, which is exactly when you
 # need the container to stay up so you can read its logs.
 # The base image is passed in whole, resolved from runtime_images.node in the
@@ -31,18 +31,18 @@ RUN apt-get update \
 # whatever npm happens to ship.
 RUN corepack enable
 
-ENV HOME=/dx/cache/home \
-    NPM_CONFIG_CACHE=/dx/cache/npm \
-    YARN_CACHE_FOLDER=/dx/cache/yarn \
-    PNPM_HOME=/dx/cache/pnpm \
-    XDG_CONFIG_HOME=/dx/cache/config \
-    XDG_CACHE_HOME=/dx/cache/xdg
+ENV HOME=/ssmd/cache/home \
+    NPM_CONFIG_CACHE=/ssmd/cache/npm \
+    YARN_CACHE_FOLDER=/ssmd/cache/yarn \
+    PNPM_HOME=/ssmd/cache/pnpm \
+    XDG_CONFIG_HOME=/ssmd/cache/config \
+    XDG_CACHE_HOME=/ssmd/cache/xdg
 
 COPY serve.conf /etc/caddy/Caddyfile
-COPY entrypoint.sh /usr/local/bin/dx-entrypoint
-RUN chmod +x /usr/local/bin/dx-entrypoint \
-    && mkdir -p /dx/cache && chmod -R 777 /dx
+COPY entrypoint.sh /usr/local/bin/ssmd-entrypoint
+RUN chmod +x /usr/local/bin/ssmd-entrypoint \
+    && mkdir -p /ssmd/cache && chmod -R 777 /ssmd
 
 WORKDIR /app
-ENTRYPOINT ["/usr/bin/tini", "--", "dx-entrypoint"]
+ENTRYPOINT ["/usr/bin/tini", "--", "ssmd-entrypoint"]
 CMD ["serve"]

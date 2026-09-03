@@ -1,10 +1,10 @@
 ---
 description: Check whether the app actually works right now, and report the evidence
 argument-hint: "[instance-slug]"
-allowed-tools: Bash(*/dx verify*), Bash(*/dx logs*), Bash(*/dx doctor*)
+allowed-tools: Bash(*/ssmd verify*), Bash(*/ssmd logs*), Bash(*/ssmd doctor*)
 ---
 
-Run `./dx verify $1` (default instance: main).
+Run `./ssmd verify $1` (default instance: main).
 
 Report the result honestly and specifically:
 

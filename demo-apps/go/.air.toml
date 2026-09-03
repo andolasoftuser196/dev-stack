@@ -1,11 +1,11 @@
 # The project's own air config wins over the runtime's default - a project that
 # has tuned its watch rules knows its layout better than a generic default.
 root = "."
-tmp_dir = "/dx/cache/air"
+tmp_dir = "/ssmd/cache/air"
 
 [build]
-  cmd = "go build -o /dx/cache/air/main ."
-  bin = "/dx/cache/air/main"
+  cmd = "go build -o /ssmd/cache/air/main ."
+  bin = "/ssmd/cache/air/main"
   include_ext = ["go"]
   exclude_dir = ["tmp", "vendor", "testdata"]
   exclude_regex = ["_test\\.go$"]

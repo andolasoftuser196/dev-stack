@@ -3,7 +3,7 @@
 #
 # The reason column is not decoration. A bare list of globs invites the next
 # person to "just add one" without understanding why the others are there, and
-# the reason is what 'dx agent diff' prints and what the audit log records when
+# the reason is what 'ssmd agent diff' prints and what the audit log records when
 # a change is held back.
 #
 # Globs: '**' matches across directory separators. Paths are repo-root-relative,

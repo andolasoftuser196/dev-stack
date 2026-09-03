@@ -6,7 +6,7 @@ SB="$(mk_sandbox)"; trap 'rm_sandbox "$SB"' EXIT
 load_sandbox "$SB"
 
 t_section "seeding"
-assert_ok "the database exists after first load" test -f "$DX_DB_PATH"
+assert_ok "the database exists after first load" test -f "$SSMD_DB_PATH"
 assert_ne "0" "$(printf 'SELECT COUNT(*) FROM config;' | sq1)" "config rows were seeded"
 for s in default stack host:local; do
     n="$(printf 'SELECT COUNT(*) FROM config WHERE scope=%s;' "$(sq_quote "$s")" | sq1)"
@@ -34,10 +34,10 @@ assert_eq "caddy:2-alpine" "$(config_get images.proxy)" "removing the stack laye
 t_section "a different host profile resolves differently"
 ( load_sandbox "$SB" vm >/dev/null 2>&1
   [ "$(config_get proxy.bind)" = "0.0.0.0" ] ) \
-  && t_ok "DX_HOST=vm gives 0.0.0.0" || t_fail "DX_HOST=vm gives 0.0.0.0"
+  && t_ok "SSMD_HOST=vm gives 0.0.0.0" || t_fail "SSMD_HOST=vm gives 0.0.0.0"
 ( load_sandbox "$SB" alt-ports >/dev/null 2>&1
   [ "$(config_get proxy.https)" = "8443" ] ) \
-  && t_ok "DX_HOST=alt-ports gives 8443" || t_fail "DX_HOST=alt-ports gives 8443"
+  && t_ok "SSMD_HOST=alt-ports gives 8443" || t_fail "SSMD_HOST=alt-ports gives 8443"
 load_sandbox "$SB" local
 
 t_section "history"
@@ -58,7 +58,7 @@ t_section "unset of an absent key is an error, not a silent no-op"
 assert_fail "unsetting a key the scope does not have fails" config_unset no.such.key stack
 
 t_section "cache"
-# config_set removes the cache so the next dx rebuilds it; reload to get one.
+# config_set removes the cache so the next ssmd rebuilds it; reload to get one.
 load_sandbox "$SB" local
 assert_file "$SB/.stack.env" "the cache file exists"
 assert_contains "$(cat "$SB/.stack.env")" "# host=local" "the cache records which host it was built for"
@@ -93,8 +93,8 @@ config_unset weird.value stack >/dev/null
 t_section "sqlite backends agree"
 if command -v sqlite3 >/dev/null 2>&1 && python3 -c 'import sqlite3' 2>/dev/null; then
     q='SELECT key,value FROM config WHERE scope="default" ORDER BY key;'
-    a="$(printf '%s' "$q" | sqlite3 -batch -noheader -separator "$DX_FS" "$DX_DB_PATH" | md5sum)"
-    b="$(printf '%s' "$q" | python3 "$SB/lib/dxdb.py" "$DX_DB_PATH" | md5sum)"
+    a="$(printf '%s' "$q" | sqlite3 -batch -noheader -separator "$SSMD_FS" "$SSMD_DB_PATH" | md5sum)"
+    b="$(printf '%s' "$q" | python3 "$SB/lib/ssmddb.py" "$SSMD_DB_PATH" | md5sum)"
     assert_eq "$a" "$b" "the cli and python backends return identical bytes"
 else
     t_skip "backend comparison" "need both sqlite3 and python3"
@@ -103,7 +103,7 @@ fi
 t_section "empty columns survive the field separator"
 # The bug this guards: tab is IFS whitespace, so `read` collapsed runs of it and
 # an empty column shifted every field after it.
-printf "SELECT 'a','','c';" | sq | { IFS="$DX_FS" read -r x y z
+printf "SELECT 'a','','c';" | sq | { IFS="$SSMD_FS" read -r x y z
     assert_eq "a" "$x" "field 1"
     assert_eq ""  "$y" "field 2 is empty and still present"
     assert_eq "c" "$z" "field 3 did not shift left"; }

@@ -1,10 +1,10 @@
 ---
 description: Spawn and manage isolated agent sandboxes
 argument-hint: "spawn <branch> | ls | attach <slug> | diff <slug> | rm <slug>"
-allowed-tools: Bash(*/dx agent*), Bash(*/dx verify*)
+allowed-tools: Bash(*/ssmd agent*), Bash(*/ssmd verify*)
 ---
 
-Run `./dx agent $ARGUMENTS`.
+Run `./ssmd agent $ARGUMENTS`.
 
 If the subcommand is `diff`, read the verdict carefully and relay it accurately:
 

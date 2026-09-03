@@ -1,7 +1,7 @@
 # One instance: a git worktree running as its own compose project against the
 # base stack's database, cache, mail and storage.
 #
-# Used by both `dx wt` (a branch you are working on) and `dx agent` (a branch an
+# Used by both `ssmd wt` (a branch you are working on) and `ssmd agent` (a branch an
 # agent is working on). They are the same thing with different defaults - an
 # agent instance adds the sandbox container below and drops its network egress.
 # Keeping them one file means a fix to instance networking cannot land for
@@ -11,43 +11,43 @@
 # picks the compose project name.
 
 x-labels: &labels
-  dx.stack: "${STACK_NAME}"
-  dx.managed: "true"
-  dx.instance: "${INSTANCE_SLUG}"
-  dx.kind: "${INSTANCE_KIND}"
+  ssmd.stack: "${STACK_NAME}"
+  ssmd.managed: "true"
+  ssmd.instance: "${INSTANCE_SLUG}"
+  ssmd.kind: "${INSTANCE_KIND}"
 
 services:
 
   app:
     image: "${APP_IMAGE}"
     container_name: "${PROJECT}-${INSTANCE_KIND}-${INSTANCE_SLUG}-app"
-    user: "${HOST_UID:?run via dx}:${HOST_GID:?run via dx}"
+    user: "${HOST_UID:?run via ssmd}:${HOST_GID:?run via ssmd}"
     working_dir: /app
     init: true
     restart: unless-stopped
     environment:
-      DX_STACK: "${STACK_NAME}"
-      DX_DOMAIN: "${STACK_DOMAIN}"
-      DX_RUNTIME: "${STACK_RUNTIME_KIND}"
-      DX_FRAMEWORK: "${STACK_RUNTIME_FRAMEWORK}"
-      DX_DOCROOT: "${STACK_RUNTIME_DOCROOT}"
-      DX_PORT: "${STACK_RUNTIME_PORT}"
-      DX_APP_PORT: "${DX_APP_PORT}"
-      DX_HEALTHZ: "${STACK_RUNTIME_HEALTHZ}"
+      SSMD_STACK: "${STACK_NAME}"
+      SSMD_DOMAIN: "${STACK_DOMAIN}"
+      SSMD_RUNTIME: "${STACK_RUNTIME_KIND}"
+      SSMD_FRAMEWORK: "${STACK_RUNTIME_FRAMEWORK}"
+      SSMD_DOCROOT: "${STACK_RUNTIME_DOCROOT}"
+      SSMD_PORT: "${STACK_RUNTIME_PORT}"
+      SSMD_APP_PORT: "${SSMD_APP_PORT}"
+      SSMD_HEALTHZ: "${STACK_RUNTIME_HEALTHZ}"
       # Everything that must not collide between instances keys off this.
-      DX_INSTANCE: "${INSTANCE_SLUG}"
+      SSMD_INSTANCE: "${INSTANCE_SLUG}"
       # Its own python venv: two branches with different dependencies must not
       # overwrite each other's site-packages.
-      DX_VENV: "/dx/cache/venv/${INSTANCE_SLUG}"
+      SSMD_VENV: "/ssmd/cache/venv/${INSTANCE_SLUG}"
       # Command overrides from config (commands.*). Empty unless set; each
       # runtime falls back to what runtime.framework implies.
-      DX_START_CMD: "${STACK_COMMANDS_START}"
-      DX_QUEUE_CMD: "${STACK_COMMANDS_QUEUE}"
-      DX_SCHEDULE_CMD: "${STACK_COMMANDS_SCHEDULE}"
-      DX_ASGI_APP: "${STACK_COMMANDS_ASGI_APP}"
-      DX_WSGI_APP: "${STACK_COMMANDS_WSGI_APP}"
-      DX_CELERY_APP: "${STACK_COMMANDS_CELERY_APP}"
-      DX_SETTINGS_MODULE: "${STACK_COMMANDS_SETTINGS_MODULE}"
+      SSMD_START_CMD: "${STACK_COMMANDS_START}"
+      SSMD_QUEUE_CMD: "${STACK_COMMANDS_QUEUE}"
+      SSMD_SCHEDULE_CMD: "${STACK_COMMANDS_SCHEDULE}"
+      SSMD_ASGI_APP: "${STACK_COMMANDS_ASGI_APP}"
+      SSMD_WSGI_APP: "${STACK_COMMANDS_WSGI_APP}"
+      SSMD_CELERY_APP: "${STACK_COMMANDS_CELERY_APP}"
+      SSMD_SETTINGS_MODULE: "${STACK_COMMANDS_SETTINGS_MODULE}"
       APP_URL: "https://${INSTANCE_SLUG}.${STACK_DOMAIN}"
 
       # Own database. Not a schema, not a prefix - a whole database, so a
@@ -103,14 +103,14 @@ services:
       PHP_OPCACHE_MEMORY: "${PHP_OPCACHE_MEMORY}"
       PHP_OPCACHE_FILES: "${PHP_OPCACHE_FILES}"
       PHP_TIMEZONE: "${PHP_TIMEZONE}"
-      DX_REQUEST_BODY_MAX: "${PHP_REQUEST_BODY}"
+      SSMD_REQUEST_BODY_MAX: "${PHP_REQUEST_BODY}"
     volumes:
       - "${INSTANCE_DIR}:/app"
-      - ./data/proxy/caddy/pki/authorities/local:/dx/ca:ro
+      - ./data/proxy/caddy/pki/authorities/local:/ssmd/ca:ro
       # The dependency cache is shared with the base stack on purpose: a fresh
       # worktree installing 200 packages from a warm cache takes seconds instead
       # of minutes, and that difference decides whether people use worktrees.
-      - ./data/build-cache:/dx/cache
+      - ./data/build-cache:/ssmd/cache
     healthcheck:
       test: ["CMD", "sh", "-c",
              "curl -fsS http://localhost:${STACK_RUNTIME_PORT}${STACK_RUNTIME_HEALTHZ} || exit 1"]
@@ -145,14 +145,14 @@ services:
     working_dir: /app
     init: true
     restart: unless-stopped
-    command: [ "dx-entrypoint", "queue" ]
+    command: [ "ssmd-entrypoint", "queue" ]
     environment:
-      DX_ROLE: "queue"
-      DX_INSTANCE: "${INSTANCE_SLUG}"
+      SSMD_ROLE: "queue"
+      SSMD_INSTANCE: "${INSTANCE_SLUG}"
       WORKER_MAX_RUNTIME: "${WORKER_MAX_RUNTIME}"
       QUEUE_TRIES: "${QUEUE_TRIES}"
       QUEUE_TIMEOUT: "${QUEUE_TIMEOUT}"
-      DX_FRAMEWORK: "${STACK_RUNTIME_FRAMEWORK}"
+      SSMD_FRAMEWORK: "${STACK_RUNTIME_FRAMEWORK}"
       DB_HOST: "${DB_ENGINE}"
       DB_PORT: "${DB_INTERNAL_PORT}"
       DB_DATABASE: "${INSTANCE_DB}"
@@ -164,15 +164,15 @@ services:
       MAIL_PORT: "${PORT_MAIL_SMTP}"
     volumes:
       - "${INSTANCE_DIR}:/app"
-      - ./data/build-cache:/dx/cache
+      - ./data/build-cache:/ssmd/cache
     depends_on:
       app: { condition: service_started }
     networks: [ stack ]
     labels: *labels
 
   # ── the agent sandbox ─────────────────────────────────────────────────────
-  # The container a coding agent runs *inside*. Profile "sandbox", so `dx wt`
-  # never starts one and `dx agent` always does.
+  # The container a coding agent runs *inside*. Profile "sandbox", so `ssmd wt`
+  # never starts one and `ssmd agent` always does.
   #
   # The isolation story, in order of how much it actually buys:
   #
@@ -204,16 +204,16 @@ services:
     restart: "no"
     command: [ "sleep", "infinity" ]
     environment:
-      DX_INSTANCE: "${INSTANCE_SLUG}"
-      DX_AGENT: "${AGENT_OWNER:-unknown}"
-      DX_STACK: "${STACK_NAME}"
-      DX_DOMAIN: "${STACK_DOMAIN}"
+      SSMD_INSTANCE: "${INSTANCE_SLUG}"
+      SSMD_AGENT: "${AGENT_OWNER:-unknown}"
+      SSMD_STACK: "${STACK_NAME}"
+      SSMD_DOMAIN: "${STACK_DOMAIN}"
       # The instance's own container name - unique, and therefore unambiguous.
       # NOT "http://app", which resolves round-robin across every instance on
       # this network (see the aliases comment above).
-      DX_APP_URL: "http://${PROJECT}-${INSTANCE_KIND}-${INSTANCE_SLUG}-app:${STACK_RUNTIME_PORT}"
-      DX_APP_HOST: "${INSTANCE_SLUG}"
-      DX_INSTANCE_DB: "${INSTANCE_DB}"
+      SSMD_APP_URL: "http://${PROJECT}-${INSTANCE_KIND}-${INSTANCE_SLUG}-app:${STACK_RUNTIME_PORT}"
+      SSMD_APP_HOST: "${INSTANCE_SLUG}"
+      SSMD_INSTANCE_DB: "${INSTANCE_DB}"
       # Proxy variables are how the allowlist is actually applied: with no route
       # of its own, anything not proxy-aware simply fails, and anything that is
       # goes through the filter. curl, git-over-https, composer, npm, pip and
@@ -227,23 +227,23 @@ services:
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
     volumes:
       - "${INSTANCE_DIR}:/app"
-      # Read-only. The sandbox may run dx to inspect and verify, but the
+      # Read-only. The sandbox may run ssmd to inspect and verify, but the
       # toolkit's own files - including the policy that constrains it - are not
       # its to change.
-      - .:/dx:ro
+      - .:/ssmd:ro
       # …with one writable window, mounted over the read-only one: the audit
-      # trail. An agent's dx calls have to be recorded in the same place the
+      # trail. An agent's ssmd calls have to be recorded in the same place the
       # human's are, or "what did it actually do" has two answers.
-      - ./data/state:/dx/data/state
-      - ./data/build-cache:/dx-cache
+      - ./data/state:/ssmd/data/state
+      - ./data/build-cache:/ssmd-cache
       - ./data/agent/${INSTANCE_SLUG}:/home/agent
-      # NOT /dx/ca. Docker has to create a bind mount's mountpoint, and /dx is
+      # NOT /ssmd/ca. Docker has to create a bind mount's mountpoint, and /ssmd is
       # mounted read-only - so a nested mount at a path that does not already
       # exist in the source tree fails the container with an OCI error that says
       # "read-only file system" and names a path nobody recognises.
-      # (./data/state mounts fine at /dx/data/state precisely because that
+      # (./data/state mounts fine at /ssmd/data/state precisely because that
       # directory does exist.)
-      - ./data/proxy/caddy/pki/authorities/local:/dx-ca:ro
+      - ./data/proxy/caddy/pki/authorities/local:/ssmd-ca:ro
     cap_drop: [ ALL ]
     cap_add: [ CHOWN, SETUID, SETGID, DAC_OVERRIDE ]
     security_opt: [ "no-new-privileges:true" ]

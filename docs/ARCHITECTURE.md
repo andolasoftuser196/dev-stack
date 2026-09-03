@@ -6,7 +6,7 @@ previous generation of this kind of tooling.
 
 ## The one-paragraph version
 
-`stack.yml` declares what a project is. `dx` compiles it to flat shell variables
+`stack.yml` declares what a project is. `ssmd` compiles it to flat shell variables
 and uses them to drive a single generic `docker-compose.yml` whose optional
 services are all profile-gated. Everything language-specific lives in a runtime
 module under `runtimes/`. A Caddy front proxy owns 80/443 and routes by hostname,
@@ -29,7 +29,7 @@ whenever the source is newer.
 
 ### Why a partial YAML reader instead of yq or python
 
-`dx` is what you reach for when the stack is already broken. Every runtime
+`ssmd` is what you reach for when the stack is already broken. Every runtime
 dependency is one more way for it to be broken too, and "install yq first" is a
 poor answer at that moment. `lib/yaml.awk` reads the fixed, shallow subset the
 schema documents - two-space indent, scalars, inline and block lists - and warns
@@ -48,7 +48,7 @@ projects, near-certainly different ports. Nobody hand-allocates anything.
 
 The proxy's 80/443 are deliberately **not** offset - a dev domain is only useful
 without a port suffix in the URL - so two stacks wanting the proxy at once is a
-genuine conflict, and `dx preflight` says so by name, distinguishing "your own
+genuine conflict, and `ssmd preflight` says so by name, distinguishing "your own
 stack already holds it" from "a different stack does".
 
 ## Routing: one proxy, one CA, no published ports
@@ -107,7 +107,7 @@ all four runtimes behave identically.
 
 ## Profiles: one compose file for every combination
 
-`stack.yml` says `database: postgres`; `dx` turns that into `--profile postgres`.
+`stack.yml` says `database: postgres`; `ssmd` turns that into `--profile postgres`.
 Compose cannot express a conditional, and generating a compose file per project
 is the obvious alternative - it works, and it means every generated file is one
 more thing that can drift from its template.
@@ -115,7 +115,7 @@ more thing that can drift from its template.
 Profiles are the simpler answer. The cost is one rule that must be obeyed:
 **`ALL_PROFILES` in `lib/core.sh` must list every profile in every compose file**,
 because `down`, `nuke` and `recreate` enable all of them and a profile missing
-from that list becomes a container `dx down` silently leaves running.
+from that list becomes a container `ssmd down` silently leaves running.
 
 ## Lifecycle hooks
 
@@ -185,7 +185,7 @@ worse than no guard, because it is trusted. (This bit us during development: the
 first version used POSIX `[[:space:]]` patterns, which Python's `re` parses as
 something else entirely and silently matched nothing.)
 
-**The MCP server** (`mcp/server.py`) gives dx typed signatures and docstrings the
+**The MCP server** (`mcp/server.py`) gives ssmd typed signatures and docstrings the
 model reads before calling, instead of terminal output it has to parse.
 Destructive operations require `confirm=True`, so an ambiguous prompt cannot
 become a dropped database - the flag has to come from an explicit decision that
@@ -193,8 +193,8 @@ shows up in the transcript.
 
 **The feedback loop** is the part that actually matters. Constraining an agent is
 worth less than letting it check its own work: `/healthz`, structured JSON logs,
-Mailpit, a watchable browser, `dx verify`'s error-diff-since-last-run, and
-`dx agent diff`'s verdict. An agent that can tell whether it succeeded needs far
+Mailpit, a watchable browser, `ssmd verify`'s error-diff-since-last-run, and
+`ssmd agent diff`'s verdict. An agent that can tell whether it succeeded needs far
 less supervision than one that cannot.
 
 ## Deliberate omissions

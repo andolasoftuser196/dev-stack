@@ -14,7 +14,7 @@ require_once dirname(__DIR__) . '/vendor/autoload.php';
  * bootstrap, before any error handler exists, so it is a bare fatal with no
  * context at all. getenv() with an explicit default does the same job.
  */
-function dx_env(string $key, ?string $default = null): ?string
+function ssmd_env(string $key, ?string $default = null): ?string
 {
     $v = getenv($key);
     return ($v === false || $v === '') ? $default : $v;
@@ -32,19 +32,19 @@ Configure::write('App', [
 ]);
 Configure::write('debug', true);
 
-// Connection details come from the process environment, which dx injects. They
+// Connection details come from the process environment, which ssmd injects. They
 // are deliberately NOT read from a committed config file: an app whose database
 // host lives in a file is an app that connects to the wrong one the first time
 // somebody runs a second instance.
-$isPostgres = str_contains((string)dx_env('DB_HOST'), 'postgres');
+$isPostgres = str_contains((string)ssmd_env('DB_HOST'), 'postgres');
 ConnectionManager::setConfig('default', [
     'className' => 'Cake\Database\Connection',
     'driver' => $isPostgres ? 'Cake\Database\Driver\Postgres' : 'Cake\Database\Driver\Mysql',
-    'host' => dx_env('DB_HOST', 'postgres'),
-    'port' => dx_env('DB_PORT', $isPostgres ? '5432' : '3306'),
-    'username' => dx_env('DB_USERNAME', 'app'),
-    'password' => dx_env('DB_PASSWORD', 'app'),
-    'database' => dx_env('DB_DATABASE', 'app_dev'),
+    'host' => ssmd_env('DB_HOST', 'postgres'),
+    'port' => ssmd_env('DB_PORT', $isPostgres ? '5432' : '3306'),
+    'username' => ssmd_env('DB_USERNAME', 'app'),
+    'password' => ssmd_env('DB_PASSWORD', 'app'),
+    'database' => ssmd_env('DB_DATABASE', 'app_dev'),
     'timezone' => 'UTC',
     'cacheMetadata' => false,
 ]);
@@ -54,9 +54,9 @@ ConnectionManager::setConfig('default', [
 // from another branch and a day spent not suspecting the cache.
 Cache::setConfig('default', [
     'className' => 'Cake\Cache\Engine\RedisEngine',
-    'host' => dx_env('REDIS_HOST', 'redis'),
-    'port' => (int)dx_env('REDIS_PORT', '6379'),
-    'database' => (int)dx_env('REDIS_DB', '0'),
-    'prefix' => dx_env('CACHE_PREFIX', 'dx_'),
+    'host' => ssmd_env('REDIS_HOST', 'redis'),
+    'port' => (int)ssmd_env('REDIS_PORT', '6379'),
+    'database' => (int)ssmd_env('REDIS_DB', '0'),
+    'prefix' => ssmd_env('CACHE_PREFIX', 'ssmd_'),
     'duration' => '+30 seconds',
 ]);

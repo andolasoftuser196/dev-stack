@@ -1,5 +1,5 @@
 {
-  "name": "dx/demo-symfony",
+  "name": "ssmd/demo-symfony",
   "type": "project",
   "require": {
     "php": ">=8.2",

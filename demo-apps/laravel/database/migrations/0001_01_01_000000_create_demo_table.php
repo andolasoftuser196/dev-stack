@@ -4,7 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-// One migration, so `dx db:migrate` has something to do and `dx wt add` has a
+// One migration, so `ssmd db:migrate` has something to do and `ssmd wt add` has a
 // schema to build in each instance's own database.
 return new class extends Migration
 {

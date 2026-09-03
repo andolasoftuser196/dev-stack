@@ -167,7 +167,7 @@ class TestRendering(unittest.TestCase):
         with Repo(**{"composer.json": {"require": {"php": "^8.3", "laravel/framework": "^11"}}}) as p:
             r = subprocess.run(
                 [sys.executable, str(ROOT / "scaffold" / "scaffold.py"),
-                 "--dx-root", str(ROOT), "--repo", str(p), "--dry-run"],
+                 "--ssmd-root", str(ROOT), "--repo", str(p), "--dry-run"],
                 capture_output=True, text=True, check=True)
         body = r.stdout.split("--- stack.yml ---", 1)[1]
         with tempfile.NamedTemporaryFile("w", suffix=".yml", delete=False) as f:

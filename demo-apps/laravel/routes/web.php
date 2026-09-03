@@ -5,19 +5,19 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
 /**
- * The dx demo status page.
+ * The ssmd demo status page.
  *
- * Deliberately not a /healthz: that is answered by Caddy in every dx runtime,
+ * Deliberately not a /healthz: that is answered by Caddy in every ssmd runtime,
  * and it has to keep answering while this application is broken. This route
  * proves the opposite thing - that the application itself can reach everything
  * the stack wired up for it.
  */
 Route::get('/', function () {
     $lines = [
-        'dx demo app',
+        'ssmd demo app',
         sprintf('runtime=%s framework=laravel version=%s',
-                env('DX_RUNTIME', 'frankenphp'), PHP_VERSION),
-        'instance=' . env('DX_INSTANCE', 'main'),
+                env('SSMD_RUNTIME', 'frankenphp'), PHP_VERSION),
+        'instance=' . env('SSMD_INSTANCE', 'main'),
     ];
 
     try {
@@ -31,10 +31,10 @@ Route::get('/', function () {
         // Write and read back. Connecting proves less than it looks like - a
         // wrong Redis logical database still connects perfectly happily, and
         // that is exactly the bug per-instance isolation exists to prevent.
-        Cache::put('dx:demo', 'ok', 30);
+        Cache::put('ssmd:demo', 'ok', 30);
         $lines[] = sprintf('cache=db%s %s',
             config('database.redis.default.database', '0'),
-            Cache::get('dx:demo') === 'ok' ? 'ok' : 'FAILED');
+            Cache::get('ssmd:demo') === 'ok' ? 'ok' : 'FAILED');
     } catch (\Throwable $e) {
         $lines[] = 'cache=FAILED: ' . $e->getMessage();
     }

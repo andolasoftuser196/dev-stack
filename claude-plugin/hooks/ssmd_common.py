@@ -1,4 +1,4 @@
-"""Shared helpers for the dx hooks.
+"""Shared helpers for the ssmd hooks.
 
 Python rather than bash for one reason: the hook contract is JSON on stdin and
 JSON on stdout, and parsing JSON in bash means either depending on jq (not always
@@ -6,7 +6,7 @@ present) or hand-rolling a parser (wrong, eventually, in a way that fails open).
 A hook that fails open is worse than no hook, because it is trusted.
 
 This is the one place in the toolkit that assumes python3. It is not part of the
-dx command surface - `dx` itself runs on bash and docker alone - so a machine
+ssmd command surface - `ssmd` itself runs on bash and docker alone - so a machine
 without python3 loses the guardrails but keeps a working dev stack.
 """
 
@@ -33,37 +33,37 @@ def read_input() -> dict:
         return {}
 
 
-def find_dx_root(cwd: str | None = None) -> Path | None:
+def find_ssmd_root(cwd: str | None = None) -> Path | None:
     """Locate the dev-stack directory.
 
     Four strategies, most explicit first:
 
-    1. `DX_ROOT` in the environment.
-    2. The plugin's user config (`CLAUDE_PLUGIN_OPTION_DX_ROOT`).
+    1. `SSMD_ROOT` in the environment.
+    2. The plugin's user config (`CLAUDE_PLUGIN_OPTION_SSMD_ROOT`).
     3. Relative to the plugin itself - correct when the plugin is used in place
        from the repository, which is the normal case.
-    4. A search upward from the working directory for a `dx` + `stack.yml` pair,
+    4. A search upward from the working directory for a `ssmd` + `stack.yml` pair,
        checking `dev-stack/` at each level.
 
-    Returns None rather than guessing. Every caller treats None as "not a dx
+    Returns None rather than guessing. Every caller treats None as "not a ssmd
     project, stay out of the way" - a hook that fires on unrelated repositories
     is a hook that gets uninstalled.
     """
-    for env in ("DX_ROOT", "CLAUDE_PLUGIN_OPTION_DX_ROOT"):
+    for env in ("SSMD_ROOT", "CLAUDE_PLUGIN_OPTION_SSMD_ROOT"):
         v = os.environ.get(env)
-        if v and (Path(v) / "dx").is_file():
+        if v and (Path(v) / "ssmd").is_file():
             return Path(v)
 
     plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT")
     if plugin_root:
         cand = Path(plugin_root).parent
-        if (cand / "dx").is_file() and (cand / "stack.yml").is_file():
+        if (cand / "ssmd").is_file() and (cand / "stack.yml").is_file():
             return cand
 
     start = Path(cwd or os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()).resolve()
     for d in [start, *start.parents]:
         for cand in (d / "dev-stack", d):
-            if (cand / "dx").is_file() and (cand / "stack.yml").is_file():
+            if (cand / "ssmd").is_file() and (cand / "stack.yml").is_file():
                 return cand
     return None
 
@@ -73,7 +73,7 @@ def deny(event: str, reason: str) -> None:
 
     The reason text goes to the model, so it is written for the model: it names
     the alternative. A guard that only says "denied" gets worked around; a guard
-    that says "use dx test" gets followed.
+    that says "use ssmd test" gets followed.
     """
     json.dump({
         "hookSpecificOutput": {
@@ -114,7 +114,7 @@ def load_rules(path: Path) -> list[tuple[str, str]]:
     return rules
 
 
-# POSIX bracket expressions are valid in `grep -E`, which is what dx's own
+# POSIX bracket expressions are valid in `grep -E`, which is what ssmd's own
 # policy_check_command uses, and are NOT valid in Python's `re` - which parses
 # `[[:space:]]` as "one of [ : s p a c e" and quietly matches nothing.
 #
@@ -187,7 +187,7 @@ def glob_to_regex(glob: str) -> re.Pattern[str]:
     return re.compile("^" + "".join(out) + "$")
 
 
-def audit(dx_root: Path, event: str, detail: str, decision: str = "allow") -> None:
+def audit(ssmd_root: Path, event: str, detail: str, decision: str = "allow") -> None:
     """Append one line to the tool audit trail.
 
     Best-effort by design: a full disk or a read-only mount must not turn into a
@@ -195,7 +195,7 @@ def audit(dx_root: Path, event: str, detail: str, decision: str = "allow") -> No
     """
     try:
         from datetime import datetime, timezone
-        p = dx_root / "data" / "state"
+        p = ssmd_root / "data" / "state"
         p.mkdir(parents=True, exist_ok=True)
         with (p / "agent-tools.jsonl").open("a", encoding="utf-8") as f:
             f.write(json.dumps({
@@ -209,10 +209,10 @@ def audit(dx_root: Path, event: str, detail: str, decision: str = "allow") -> No
         pass
 
 
-def dx(dx_root: Path, args: list[str], timeout: int = 20) -> str:
+def ssmd(ssmd_root: Path, args: list[str], timeout: int = 20) -> str:
     try:
         p = subprocess.run(
-            [str(dx_root / "dx"), *args], cwd=dx_root, capture_output=True,
+            [str(ssmd_root / "ssmd"), *args], cwd=ssmd_root, capture_output=True,
             text=True, timeout=timeout, env={**os.environ, "NO_COLOR": "1"},
         )
         return (p.stdout or p.stderr or "").strip()

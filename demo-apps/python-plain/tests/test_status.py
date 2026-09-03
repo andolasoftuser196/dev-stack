@@ -11,7 +11,7 @@ from status import status  # noqa: E402
 
 def test_renders_the_agreed_shape():
     out = status("none")
-    assert out.startswith("dx demo app")
+    assert out.startswith("ssmd demo app")
     assert "instance=" in out
 
 

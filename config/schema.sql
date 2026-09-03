@@ -1,6 +1,6 @@
--- The dx config store.
+-- The ssmd config store.
 --
--- Everything dx knows that is not a secret lives here: configuration, the
+-- Everything ssmd knows that is not a secret lives here: configuration, the
 -- instance registry, leases, and the audit trail. One file, one backup, one
 -- place to look.
 --
@@ -9,7 +9,7 @@
 -- builds the whole schema. Adding a column later means adding an ALTER guarded
 -- by a check in lib/config.sh, not editing the CREATEs above it.
 
--- WAL: a `dx status` holding a read must never block a `dx config set`. The
+-- WAL: a `ssmd status` holding a read must never block a `ssmd config set`. The
 -- default rollback journal takes a write lock for the whole transaction, which
 -- on a laptop with three terminals open is a hang nobody can explain.
 PRAGMA journal_mode=WAL;
@@ -19,7 +19,7 @@ PRAGMA foreign_keys=ON;
 -- Layered key/value. Resolution is strictly: host:<name> > stack > default.
 --
 -- Keys are dotted paths ("runtime.kind", "images.proxy"), which is what the
--- YAML seeds flatten to and what `dx config get` accepts. Values are always
+-- YAML seeds flatten to and what `ssmd config get` accepts. Values are always
 -- TEXT - SQLite would happily store a typed value, but every consumer is a
 -- shell variable or a compose interpolation, so a single representation avoids
 -- a class of "8.0 became 8" bugs.
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS config_history (
 
 CREATE INDEX IF NOT EXISTS config_history_key_idx ON config_history(key, ts);
 
--- Tracks which seed files have been imported and at what mtime, so `dx` can
+-- Tracks which seed files have been imported and at what mtime, so `ssmd` can
 -- re-import automatically when a YAML seed is edited without re-importing on
 -- every single invocation.
 CREATE TABLE IF NOT EXISTS seed_imports (
@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS leases (
 );
 
 -- ── audit ───────────────────────────────────────────────────────────────────
--- Every state-changing dx command. The point is to answer "what did the agent
+-- Every state-changing ssmd command. The point is to answer "what did the agent
 -- actually do" without relying on the agent's account of it.
 CREATE TABLE IF NOT EXISTS audit (
     id     INTEGER PRIMARY KEY AUTOINCREMENT,

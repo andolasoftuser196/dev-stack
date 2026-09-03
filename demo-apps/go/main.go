@@ -10,19 +10,19 @@ import (
 	"net/http"
 	"os"
 
-	"dx/demo/internal/status"
+	"ssmd/demo/internal/status"
 )
 
 func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = os.Getenv("DX_APP_PORT")
+		port = os.Getenv("SSMD_APP_PORT")
 	}
 	if port == "" {
 		port = "8080"
 	}
 
-	// JSON to stderr, so `dx logs` filtering and `dx verify`'s error diff treat
+	// JSON to stderr, so `ssmd logs` filtering and `ssmd verify`'s error diff treat
 	// this runtime exactly like the others.
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
 
@@ -39,7 +39,7 @@ func main() {
 	// the process unreachable from Caddy, which presents as a 502 with nothing
 	// in the application log.
 	addr := ":" + port
-	slog.Info("listening", "addr", addr, "instance", os.Getenv("DX_INSTANCE"))
+	slog.Info("listening", "addr", addr, "instance", os.Getenv("SSMD_INSTANCE"))
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		slog.Error("server stopped", "err", err)
 		os.Exit(1)

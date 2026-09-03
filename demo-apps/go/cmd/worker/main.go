@@ -10,7 +10,7 @@ import (
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
-	slog.Info("worker started", "instance", os.Getenv("DX_INSTANCE"))
+	slog.Info("worker started", "instance", os.Getenv("SSMD_INSTANCE"))
 	for range time.Tick(30 * time.Second) {
 		slog.Info("worker tick")
 	}

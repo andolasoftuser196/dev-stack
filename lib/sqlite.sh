@@ -13,31 +13,31 @@
 #                docker there is no stack to configure.
 #
 # The cost difference between the first and last is 100x, which would matter a
-# great deal if dx read the database on every command. It does not: config is
+# great deal if ssmd read the database on every command. It does not: config is
 # resolved once into a flat .stack.env cache (lib/config.sh) and every subsequent
-# dx invocation reads that file. SQLite is touched only when configuration
+# ssmd invocation reads that file. SQLite is touched only when configuration
 # actually changes, which is rare. That caching is what makes the dependency
 # affordable, and it is why the cache is not an optimisation to be removed later.
 
-DX_SQLITE_BACKEND=""
+SSMD_SQLITE_BACKEND=""
 
 sqlite_backend() {
-    [ -n "$DX_SQLITE_BACKEND" ] && { echo "$DX_SQLITE_BACKEND"; return 0; }
+    [ -n "$SSMD_SQLITE_BACKEND" ] && { echo "$SSMD_SQLITE_BACKEND"; return 0; }
     if command -v sqlite3 >/dev/null 2>&1; then
-        DX_SQLITE_BACKEND=cli
+        SSMD_SQLITE_BACKEND=cli
     elif command -v python3 >/dev/null 2>&1 && python3 -c 'import sqlite3' 2>/dev/null; then
-        DX_SQLITE_BACKEND=python
+        SSMD_SQLITE_BACKEND=python
     elif command -v docker >/dev/null 2>&1; then
-        DX_SQLITE_BACKEND=docker
+        SSMD_SQLITE_BACKEND=docker
     else
         die "no way to read the config database.
-      dx needs one of: sqlite3(1), python3 with the sqlite3 module, or docker.
-      Install sqlite3 - it is a few hundred kilobytes and makes dx noticeably
+      ssmd needs one of: sqlite3(1), python3 with the sqlite3 module, or docker.
+      Install sqlite3 - it is a few hundred kilobytes and makes ssmd noticeably
       faster:
         Debian/Ubuntu  sudo apt install sqlite3
         macOS          brew install sqlite"
     fi
-    echo "$DX_SQLITE_BACKEND"
+    echo "$SSMD_SQLITE_BACKEND"
 }
 
 # The field separator for every row this file returns.
@@ -50,9 +50,9 @@ sqlite_backend() {
 #
 # U+001F UNIT SEPARATOR is non-whitespace, so `read` preserves empty fields, and
 # it cannot occur in a config value, a path or a branch name.
-DX_FS=$'\x1f'
+SSMD_FS=$'\x1f'
 
-# Run SQL against the config database. Rows come back DX_FS-separated, no header.
+# Run SQL against the config database. Rows come back SSMD_FS-separated, no header.
 #
 # SQL arrives on stdin rather than as an argument so that a value containing a
 # quote, a newline or a semicolon cannot end the statement early. Every caller in
@@ -64,18 +64,18 @@ DX_FS=$'\x1f'
 # and a removed instance leaves its lease behind forever. -cmd runs it before
 # the SQL on stdin, on every connection.
 sq() {
-    local db="${DX_DB_PATH:?config database path not set}"
+    local db="${SSMD_DB_PATH:?config database path not set}"
     case "$(sqlite_backend)" in
         cli)
             # `PRAGMA foreign_keys=ON` in its setter form returns no rows.
             # `PRAGMA busy_timeout=N` DOES return one - it would prefix "5000"
             # to the result of every single query, which is exactly as
             # entertaining to debug as it sounds. `.timeout` is the silent form.
-            sqlite3 -batch -noheader -separator "$DX_FS" \
+            sqlite3 -batch -noheader -separator "$SSMD_FS" \
                     -cmd "PRAGMA foreign_keys=ON" \
                     -cmd ".timeout 5000" "$db" ;;
         python)
-            python3 "$DX_ROOT/lib/dxdb.py" "$db" ;;
+            python3 "$SSMD_ROOT/lib/ssmddb.py" "$db" ;;
         docker)
             # -i so stdin reaches the container; the database directory is
             # mounted rather than the file, because SQLite writes -wal and -shm
@@ -97,20 +97,20 @@ sq_quote() {
 }
 
 sqlite_init() {
-    local db="${DX_DB_PATH:?}"
+    local db="${SSMD_DB_PATH:?}"
     mkdir -p "$(dirname "$db")"
     if [ ! -f "$db" ]; then
         log "creating config database at $db"
     fi
     # Idempotent: the schema is all CREATE TABLE IF NOT EXISTS, so this runs on
     # every init without needing a migration table for the initial shape.
-    sq < "$DX_ROOT/config/schema.sql" >/dev/null
+    sq < "$SSMD_ROOT/config/schema.sql" >/dev/null
 }
 
 # True when the store exists and has been populated. Used to decide whether this
 # is a first run that needs seeding.
 sqlite_ready() {
-    [ -f "${DX_DB_PATH:-}" ] || return 1
+    [ -f "${SSMD_DB_PATH:-}" ] || return 1
     local n
     n="$(printf "SELECT COUNT(*) FROM config;" | sq1 2>/dev/null)" || return 1
     [ "${n:-0}" -gt 0 ]

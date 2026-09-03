@@ -54,14 +54,14 @@ t_section "per-runtime inner port"
 for pair in "frankenphp 0" "node 3000" "python 8000" "go 8080"; do
     set -- $pair
     config_set runtime.kind "$1" stack >/dev/null; load_sandbox "$SB" local
-    assert_eq "$2" "$DX_APP_PORT" "runtime '$1' -> inner port $2"
+    assert_eq "$2" "$SSMD_APP_PORT" "runtime '$1' -> inner port $2"
 done
 config_set runtime.kind frankenphp stack >/dev/null; load_sandbox "$SB" local
 
 t_section "an unknown runtime fails loudly"
 config_set runtime.kind nonesuch stack >/dev/null
-out="$(cd "$SB" && ./dx describe 2>&1)"; rc=$?
-assert_ne "0" "$rc" "dx refuses an unknown runtime"
+out="$(cd "$SB" && ./ssmd describe 2>&1)"; rc=$?
+assert_ne "0" "$rc" "ssmd refuses an unknown runtime"
 assert_contains "$out" "Available:" "and lists what it does support"
 config_set runtime.kind frankenphp stack >/dev/null
 

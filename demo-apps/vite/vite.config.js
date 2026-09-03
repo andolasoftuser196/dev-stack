@@ -4,7 +4,7 @@ export default defineConfig({
   server: {
     // 0.0.0.0, or the dev server is unreachable from Caddy inside the container.
     host: '0.0.0.0',
-    port: Number(process.env.PORT || process.env.DX_APP_PORT || 5173),
+    port: Number(process.env.PORT || process.env.SSMD_APP_PORT || 5173),
     strictPort: true,
     hmr: {
       // HMR connects back over the public hostname, through the proxy on 443 -

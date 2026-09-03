@@ -1,7 +1,7 @@
 # CakePHP. Serves from webroot/, not public/ - the single most common reason a
 # CakePHP stack 404s on every route.
 #
-# `bin/cake` must run inside the container (`dx cake ...`). Run on the host it
+# `bin/cake` must run inside the container (`ssmd cake ...`). Run on the host it
 # reads the host's PHP and the host's absent database config, then reports a
 # connection error rather than saying what actually went wrong.
 #
@@ -9,7 +9,7 @@
 # from a fresh clone:
 #
 #     cp examples/runtimes/frankenphp-cakephp.stack.yml config/stack.yml
-#     dx config import && dx up core && dx urls
+#     ssmd config import && ssmd up core && ssmd urls
 #
 # For a real project, change repo.root and repo.git_root to point at it.
 
@@ -58,7 +58,7 @@ tools:
   mcp: true
 
 hooks:
-  # Dependencies are not listed here. `dx up` installs them through the runtime
+  # Dependencies are not listed here. `ssmd up` installs them through the runtime
   # module, which knows the right command for the package manager in use and
   # what to do when there is no lockfile yet. Put project-specific one-time
   # setup here instead.

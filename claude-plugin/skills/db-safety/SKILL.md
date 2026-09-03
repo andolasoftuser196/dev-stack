@@ -1,15 +1,15 @@
 ---
 name: db-safety
-description: Rules for touching a dx stack's database - running migrations, loading data, resetting state, and running tests that truncate tables. Use before any operation that writes to, resets, or drops a database.
+description: Rules for touching a ssmd stack's database - running migrations, loading data, resetting state, and running tests that truncate tables. Use before any operation that writes to, resets, or drops a database.
 ---
 
-# Database safety in a dx stack
+# Database safety in a ssmd stack
 
 One rule underneath all of the specifics: **anything that can lose data takes a
-snapshot first, and if the snapshot fails, the operation does not run.** dx
+snapshot first, and if the snapshot fails, the operation does not run.** ssmd
 enforces this. Do not work around it.
 
-## Never run the test suite outside `dx test`
+## Never run the test suite outside `ssmd test`
 
 A suite using a "refresh the database" trait reads whatever database the
 configuration names and drops every table in it. If that configuration points at
@@ -18,21 +18,21 @@ the test config's own override is frequently commented out - the suite destroys
 the data you were working with.
 
 ```bash
-./dx test                       # correct: targets <db>_test, creates it if needed
-./dx test --filter=UserTest     # filters pass through
+./ssmd test                       # correct: targets <db>_test, creates it if needed
+./ssmd test --filter=UserTest     # filters pass through
 ```
 
-`dx test` refuses to run if the database name it computed does not match a
+`ssmd test` refuses to run if the database name it computed does not match a
 disposable pattern (`*_test`, `*_sandbox`). The policy hooks additionally block
 `php artisan test`, `phpunit`, `pytest` and `go test` invoked directly, and the
-denial message names `dx test` as the alternative.
+denial message names `ssmd test` as the alternative.
 
 ## Snapshots are the provisioning mechanism, not just the backup
 
 ```bash
-./dx db:snapshot              # before anything you are unsure about
-./dx db:snapshots             # list them
-./dx db:restore <file>        # snapshots the current state first, always
+./ssmd db:snapshot              # before anything you are unsure about
+./ssmd db:snapshots             # list them
+./ssmd db:restore <file>        # snapshots the current state first, always
 ```
 
 New worktree and agent instances are seeded from the most recent snapshot by
@@ -44,11 +44,11 @@ all.
 ## Dropping a database
 
 ```bash
-./dx db:drop <name>
+./ssmd db:drop <name>
 ```
 
-dx refuses unless the name matches a disposable pattern, and it snapshots first.
-It will not drop the development database at all - `dx nuke` is the deliberate
+ssmd refuses unless the name matches a disposable pattern, and it snapshots first.
+It will not drop the development database at all - `ssmd nuke` is the deliberate
 path for that, and it says exactly what it is about to destroy.
 
 `DROP DATABASE` and `TRUNCATE TABLE` typed into a shell are blocked by policy.
@@ -58,13 +58,13 @@ able to become a dropped database.
 ## Migrations
 
 ```bash
-./dx db:migrate
+./ssmd db:migrate
 ```
 
 Runs the project's migration command for its framework. Two things to know:
 
 - **Migrations are on the review-gate list.** A change under `migrations/` is
-  held for a human by `dx agent diff`. The change is not wrong - schema changes
+  held for a human by `ssmd agent diff`. The change is not wrong - schema changes
   need eyes, and a plausible-looking migration is among the most dangerous
   things an agent can write.
 - **A fresh database and a migrated one can differ.** Projects that ship a schema
@@ -89,4 +89,4 @@ once, and it means a migration that goes wrong on one branch cannot be seen from
 another.
 
 Redis has sixteen logical databases and the base stack owns 0, so fifteen
-concurrent instances is a hard ceiling. `dx wt ls` shows which are allocated.
+concurrent instances is a hard ceiling. `ssmd wt ls` shows which are allocated.

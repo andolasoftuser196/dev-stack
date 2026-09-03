@@ -1,11 +1,11 @@
 name: Bug report
-description: Something in dx does not behave the way it says it does
+description: Something in ssmd does not behave the way it says it does
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        `dx doctor` and `dx describe` are read-only and print no secrets. Their
+        `ssmd doctor` and `ssmd describe` are read-only and print no secrets. Their
         output usually identifies the problem faster than a description does.
 
         Security issues go through [SECURITY.md](../blob/main/SECURITY.md)
@@ -17,7 +17,7 @@ body:
       label: What happened
       description: The command you ran and what it did.
       placeholder: |
-        $ ./dx up
+        $ ./ssmd up
         ...
     validations:
       required: true
@@ -32,7 +32,7 @@ body:
   - type: textarea
     id: doctor
     attributes:
-      label: ./dx doctor
+      label: ./ssmd doctor
       render: text
     validations:
       required: true
@@ -40,7 +40,7 @@ body:
   - type: textarea
     id: describe
     attributes:
-      label: ./dx describe
+      label: ./ssmd describe
       render: text
     validations:
       required: true
@@ -78,5 +78,5 @@ body:
     id: logs
     attributes:
       label: Relevant logs
-      description: "`./dx logs` if a container is involved. Trim to the part that matters."
+      description: "`./ssmd logs` if a container is involved. Trim to the part that matters."
       render: text

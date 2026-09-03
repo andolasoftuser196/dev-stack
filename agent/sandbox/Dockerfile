@@ -36,14 +36,14 @@ RUN if command -v npm >/dev/null 2>&1; then \
 # supplies the commit identity and the CA paths - and /etc/profile resets PATH
 # unconditionally, losing the language toolchain (go, the python venv, node's
 # global bin). The profile restores it from here.
-ENV DX_IMAGE_PATH=$PATH
+ENV SSMD_IMAGE_PATH=$PATH
 ENV HOME=/home/agent \
-    DX_SANDBOX=1 \
+    SSMD_SANDBOX=1 \
     GIT_PAGER=cat \
     PAGER=cat
 RUN mkdir -p /home/agent && chmod 777 /home/agent
 
-COPY sandbox-profile.sh /etc/profile.d/00-dx-sandbox.sh
-RUN chmod 644 /etc/profile.d/00-dx-sandbox.sh
+COPY sandbox-profile.sh /etc/profile.d/00-ssmd-sandbox.sh
+RUN chmod 644 /etc/profile.d/00-ssmd-sandbox.sh
 
 WORKDIR /app

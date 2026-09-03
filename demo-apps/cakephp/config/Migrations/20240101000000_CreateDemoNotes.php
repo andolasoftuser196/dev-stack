@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 use Migrations\AbstractMigration;
 
-// One migration, so `dx db:migrate` has something to apply and each worktree
+// One migration, so `ssmd db:migrate` has something to apply and each worktree
 // instance builds a schema in its own database.
 class CreateDemoNotes extends AbstractMigration
 {

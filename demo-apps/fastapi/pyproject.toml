@@ -6,7 +6,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "dx-demo-fastapi"
+name = "ssmd-demo-fastapi"
 version = "1.0.0"
 requires-python = ">=3.11"
 dependencies = [
@@ -23,7 +23,7 @@ dependencies = [
 dev = ["pytest>=8.0"]
 
 [tool.pytest.ini_options]
-# No database name here. dx sets DB_DATABASE to a disposable one in the
+# No database name here. ssmd sets DB_DATABASE to a disposable one in the
 # environment before invoking the runner, and refuses to run if the name it
 # computed does not look disposable - a suite that names its own database is a
 # suite that eventually truncates the wrong one.

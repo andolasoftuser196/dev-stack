@@ -1,6 +1,6 @@
 #!/usr/bin/env php
 <?php
-// Run it through the container, always:  dx artisan <command>
+// Run it through the container, always:  ssmd artisan <command>
 // On the host it reads the host's PHP and no database configuration at all,
 // then reports a connection error rather than saying what actually went wrong.
 use Symfony\Component\Console\Input\ArgvInput;

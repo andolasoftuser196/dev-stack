@@ -1,6 +1,6 @@
 # config/defaults.yml - toolkit defaults, seeded into the `default` scope.
 #
-# Every value dx uses that is not project-specific. Nothing in lib/, dx or the
+# Every value ssmd uses that is not project-specific. Nothing in lib/, ssmd or the
 # compose files may hardcode any of these: if a number or an image tag appears
 # in code, it belongs here instead.
 #
@@ -8,16 +8,16 @@
 # anything here in config/stack.yml; a machine overrides anything in
 # config/hosts.yml. This file is the toolkit's opinion, not anyone's constraint.
 #
-# Editing this file re-imports it automatically on the next dx command (the
+# Editing this file re-imports it automatically on the next ssmd command (the
 # import is keyed on mtime). To change one value without editing a file:
-#     dx config set images.proxy caddy:2.8-alpine
+#     ssmd config set images.proxy caddy:2.8-alpine
 
 # ── container images ────────────────────────────────────────────────────────
 # Pinned to a major where the upstream is disciplined about tags, and to an
 # exact version where it is not. `latest` appears only for images whose whole
 # purpose is to track upstream and whose breakage is cosmetic.
 #
-# Bump one with:  dx config set images.<name> <tag>
+# Bump one with:  ssmd config set images.<name> <tag>
 images:
   proxy: caddy:2-alpine
   mysql: mysql
@@ -102,7 +102,7 @@ app_ports:
   python: 8000
   go: 8080
 
-# Host-published ports are derived, not assigned, so several dx stacks coexist
+# Host-published ports are derived, not assigned, so several ssmd stacks coexist
 # without anyone hand-allocating. A hash of name@domain gives a stable offset in
 # [span_min, span_min+span), added to each base below.
 #
@@ -119,7 +119,7 @@ port_offset:
   base_mcp: 24000
 
 # ── driver names the application reads ──────────────────────────────────────
-# dx already injects DB_HOST, DB_DATABASE and friends. Frameworks additionally
+# ssmd already injects DB_HOST, DB_DATABASE and friends. Frameworks additionally
 # need to be told *which driver* to use, and they will not infer it: Laravel 11
 # defaults DB_CONNECTION to sqlite, so a stack with a perfectly healthy MySQL
 # reports "database file does not exist" and nothing points at the cause.
@@ -143,7 +143,7 @@ app_env:
   mail_mailer: smtp
   filesystem_disk: s3
   # The scheme half of DATABASE_URL, which Doctrine, Prisma, SQLAlchemy, Diesel,
-  # Ecto and node-postgres all read. dx assembles the rest from the connection
+  # Ecto and node-postgres all read. ssmd assembles the rest from the connection
   # details it already injects.
   #
   # Deliberately the plain schemes rather than a driver-qualified one
@@ -192,14 +192,14 @@ php:
   opcache_memory: 256
   opcache_max_files: 20000
   timezone: UTC
-  # Used by `dx phpstan`; the tool's own default lets analysis grow far enough
+  # Used by `ssmd phpstan`; the tool's own default lets analysis grow far enough
   # to push a small box into swap and take the database down with it.
   phpstan_memory: 1G
   request_body_max: 64MiB
 
 # ── presets ─────────────────────────────────────────────────────────────────
-# `dx up <preset>` -> this profile set, on top of whatever the service selection
-# already implies. Add a preset by adding a key; dx reads them, it does not know
+# `ssmd up <preset>` -> this profile set, on top of whatever the service selection
+# already implies. Add a preset by adding a key; ssmd reads them, it does not know
 # them, so a new preset needs no code change.
 default_preset: default
 
@@ -210,7 +210,7 @@ presets:
   full: "queue scheduler tools browser mcp"
 
 # Every profile that exists in any compose file. down / nuke / recreate enable
-# all of them - a profile missing from this list becomes a container `dx down`
+# all of them - a profile missing from this list becomes a container `ssmd down`
 # silently leaves running.
 profiles:
   all: "mysql postgres redis mailpit minio meilisearch pgvector queue scheduler tools browser mcp egress agent sandbox"
@@ -230,7 +230,7 @@ instances:
   seed_from_snapshot: true
 
 # ── database safety ─────────────────────────────────────────────────────────
-# The patterns dx will drop, and the ones it will point a test suite at. These
+# The patterns ssmd will drop, and the ones it will point a test suite at. These
 # were duplicated across five files; they are one setting now.
 #
 # {db} expands to the stack's development database name.
@@ -289,7 +289,7 @@ preflight:
   base_memory_gb: 4
 
 # Xdebug mode: off | debug | develop | debug,develop | profile | coverage.
-# `dx debug on|off` flips this in the database rather than editing a file.
+# `ssmd debug on|off` flips this in the database rather than editing a file.
 xdebug:
   mode: off
 
@@ -302,7 +302,7 @@ storage:
 # ── output ──────────────────────────────────────────────────────────────────
 output:
   log_tail: 200
-  # Regex `dx verify` and `dx errors` use to find real errors across every log
+  # Regex `ssmd verify` and `ssmd errors` use to find real errors across every log
   # format the runtimes emit - JSON level fields, PHP fatals, Python tracebacks,
   # Go panics.
   error_pattern: '"level":"(error|critical|emergency)"|\b(fatal error|uncaught|exception|traceback|panic:)\b'

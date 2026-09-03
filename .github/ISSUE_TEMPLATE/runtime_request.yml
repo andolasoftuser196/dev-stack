@@ -1,12 +1,12 @@
 name: Runtime request
-description: Support for a language or framework dx does not have yet
+description: Support for a language or framework ssmd does not have yet
 labels: [runtime]
 body:
   - type: markdown
     attributes:
       value: |
         Adding a runtime means adding a directory under `runtimes/` - never
-        editing `dx`. `runtimes/_contract.md` is the whole contract, and
+        editing `ssmd`. `runtimes/_contract.md` is the whole contract, and
         CONTRIBUTING.md lists what "complete" means. If you are willing to write
         it, say so; the answer to "would you take a PR for this" is almost
         always yes.
@@ -35,7 +35,7 @@ body:
     id: verbs
     attributes:
       label: Its everyday commands
-      description: "The equivalents of `dx artisan`, `dx npm`, `dx manage` - install, test, lint, repl, migrate."
+      description: "The equivalents of `ssmd artisan`, `ssmd npm`, `ssmd manage` - install, test, lint, repl, migrate."
 
   - type: checkboxes
     id: willing

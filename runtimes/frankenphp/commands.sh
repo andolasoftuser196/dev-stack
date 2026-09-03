@@ -1,5 +1,5 @@
-# runtimes/frankenphp/commands.sh - dx verbs for PHP projects.
-# Sourced by dx. See runtimes/_contract.md.
+# runtimes/frankenphp/commands.sh - ssmd verbs for PHP projects.
+# Sourced by ssmd. See runtimes/_contract.md.
 
 rt_display_name() { echo "FrankenPHP ${STACK_RUNTIME_VERSION} (${STACK_RUNTIME_FRAMEWORK})"; }
 
@@ -7,7 +7,7 @@ rt_verbs() { echo "composer artisan cake console php phpunit pint phpstan tinker
 
 # NOT `sh -lc`. A login shell sources /etc/profile, which on Debian sets PATH
 # unconditionally - clobbering everything the image added. The go toolchain
-# (/usr/local/go/bin) and the python venv (/dx/cache/venv/bin) both vanish, and
+# (/usr/local/go/bin) and the python venv (/ssmd/cache/venv/bin) both vanish, and
 # the symptom is `go: not found` in a container that plainly has go in it.
 #
 # `docker exec` already applies the image's ENV, so a plain shell has the right
@@ -48,7 +48,7 @@ rt_migrate() {
 #   1. The database name is forced to <db>_test here, in the environment, so it
 #      is right even if phpunit.xml's own <env> block is commented out - which it
 #      was, in the stack this lesson came from.
-#   2. dx refuses to proceed if that name does not match the disposable pattern.
+#   2. ssmd refuses to proceed if that name does not match the disposable pattern.
 rt_test() {
     local test_db="${DB_NAME}$(_cfg DATABASE_SAFETY_TEST_SUFFIX)"
 
@@ -59,7 +59,7 @@ rt_test() {
     db_matches_patterns "$test_db" DATABASE_SAFETY_TEST_PATTERN || die \
         "refusing to run tests against '$test_db' - it does not match
       database_safety.test_pattern ($(_cfg DATABASE_SAFETY_TEST_PATTERN)).
-      Nothing in dx will point a suite that truncates tables at a database you
+      Nothing in ssmd will point a suite that truncates tables at a database you
       might care about."
 
     log "ensuring test database '$test_db' exists"
@@ -106,16 +106,16 @@ rt_dispatch() {
     local verb="$1"; shift || true
     case "$verb" in
         composer)
-            # Deliberately no `dx composer update`. A lockfile pin is often the
+            # Deliberately no `ssmd composer update`. A lockfile pin is often the
             # only thing holding a project away from a compromised release, and
             # `update` re-resolves it silently. If you genuinely need to update,
-            # do it knowingly with `dx exec app composer update` and read the
+            # do it knowingly with `ssmd exec app composer update` and read the
             # diff before committing it.
             case "${1:-}" in
                 update|require|remove)
                     die "'composer $1' rewrites the lockfile.
-      dx will not do that for you, because the diff needs a human. If you mean it:
-        dx exec app composer $*
+      ssmd will not do that for you, because the diff needs a human. If you mean it:
+        ssmd exec app composer $*
       then review composer.lock before committing." ;;
             esac
             _php_in app "composer $*" ;;
@@ -132,7 +132,7 @@ rt_dispatch() {
     esac
 }
 
-# Framework-specific advice `dx doctor` prints when something looks off. Kept
+# Framework-specific advice `ssmd doctor` prints when something looks off. Kept
 # with the runtime rather than in doctor.sh so that adding a framework does not
 # mean editing a file in lib/.
 rt_doctor_notes() {
@@ -144,7 +144,7 @@ rt_doctor_notes() {
              encrypted columns; generate it once, then leave it alone."
     fi
     if [ -d "$APP_DIR/storage" ] && [ -n "$(find "$APP_DIR/storage" ! -user "$HOST_UID" -print -quit 2>/dev/null)" ]; then
-        warn "root-owned files under storage/ - 'dx fix-perms' repairs them"
+        warn "root-owned files under storage/ - 'ssmd fix-perms' repairs them"
     fi
 }
 
@@ -156,6 +156,6 @@ rt_doctor_notes() {
 # 'django'` immediately after a successful install — because the install went to
 # the venv and the hook ran outside it.
 #
-# Every caller that runs a project command goes through this: hooks, dx run,
-# dx exec, and the per-instance equivalents.
+# Every caller that runs a project command goes through this: hooks, ssmd run,
+# ssmd exec, and the per-instance equivalents.
 rt_exec() { local svc="$1"; shift; dexec "$(container "$svc")" sh -c "$*"; }

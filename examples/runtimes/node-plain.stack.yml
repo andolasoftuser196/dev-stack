@@ -2,7 +2,7 @@
 #
 # With framework: none the runtime runs 'npm run dev'. If the script is named
 # something else:
-#     dx config set runtime.start_cmd 'node --watch server.js'
+#     ssmd config set runtime.start_cmd 'node --watch server.js'
 #
 # Whatever it runs must listen on $PORT (set to runtime.app_port) and on
 # 0.0.0.0. Binding 127.0.0.1 inside a container makes it unreachable from Caddy,
@@ -12,7 +12,7 @@
 # from a fresh clone:
 #
 #     cp examples/runtimes/node-plain.stack.yml config/stack.yml
-#     dx config import && dx up core && dx urls
+#     ssmd config import && ssmd up core && ssmd urls
 #
 # For a real project, change repo.root and repo.git_root to point at it.
 
@@ -66,7 +66,7 @@ tools:
   mcp: true
 
 hooks:
-  # Dependencies are not listed here. `dx up` installs them through the runtime
+  # Dependencies are not listed here. `ssmd up` installs them through the runtime
   # module, which knows the right command for the package manager in use and
   # what to do when there is no lockfile yet. Put project-specific one-time
   # setup here instead.

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Stack-control MCP server - dx as tools.
+"""Stack-control MCP server - ssmd as tools.
 
-Why this exists rather than letting the agent shell out to dx: a tool call has a
+Why this exists rather than letting the agent shell out to ssmd: a tool call has a
 typed signature, a docstring the model reads before calling, and a result the
 model does not have to parse out of terminal output. Shelling out gives you none
-of that, and the failure mode is an agent that runs `dx up` four times because it
+of that, and the failure mode is an agent that runs `ssmd up` four times because it
 could not tell whether the first one worked.
 
 Design rules, all of them learned the hard way:
@@ -43,25 +43,25 @@ except ImportError:  # pragma: no cover
     print("mcp package missing: pip install -r mcp/requirements.txt", file=sys.stderr)
     raise SystemExit(1)
 
-DX_ROOT = Path(os.environ.get("DX_ROOT", Path(__file__).resolve().parent.parent))
-DX = str(DX_ROOT / "dx")
+SSMD_ROOT = Path(os.environ.get("SSMD_ROOT", Path(__file__).resolve().parent.parent))
+SSMD = str(SSMD_ROOT / "ssmd")
 
 
 def _config() -> dict[str, str]:
     """Read the resolved configuration.
 
-    From .stack.env, the flat cache dx maintains - not from the database
-    directly. Two reasons: the cache is exactly what dx itself is using, so the
+    From .stack.env, the flat cache ssmd maintains - not from the database
+    directly. Two reasons: the cache is exactly what ssmd itself is using, so the
     server cannot disagree with the CLI about a timeout; and reading it needs no
     sqlite binding in this container, whose image is a bare python:slim.
 
-    If the cache is missing (dx has never run here), every lookup falls back to
+    If the cache is missing (ssmd has never run here), every lookup falls back to
     the literal defaults below. Those are the only numbers in this file, and they
     exist so a fresh container answers rather than crashing.
     """
     cfg: dict[str, str] = {}
     try:
-        for line in (DX_ROOT / ".stack.env").read_text().splitlines():
+        for line in (SSMD_ROOT / ".stack.env").read_text().splitlines():
             if line.startswith("#") or "=" not in line:
                 continue
             k, _, v = line.partition("=")
@@ -82,9 +82,9 @@ def _num(key: str, fallback: int) -> int:
 
 
 # Every timeout and limit comes from the config database. A single global
-# timeout would either kill a legitimate `dx up` or let a wedged test run hold
+# timeout would either kill a legitimate `ssmd up` or let a wedged test run hold
 # the session open, so they are per operation - and tunable without editing this
-# file:  dx config set mcp.timeout_test 7200
+# file:  ssmd config set mcp.timeout_test 7200
 DEFAULT_TIMEOUT = _num("TIMEOUTS_MCP_DEFAULT", 900)
 MAX_OUTPUT = _num("MCP_MAX_OUTPUT", 60_000)
 T_DESCRIBE = _num("MCP_TIMEOUT_DESCRIBE", 30)
@@ -104,37 +104,37 @@ ERROR_PATTERN = CFG.get(
 )
 MAIL_UI_PORT = _num("PORTS_MAIL_UI", 8025)
 
-mcp = FastMCP("dx-devstack")
+mcp = FastMCP("ssmd-devstack")
 
 
 def _run(args: list[str], timeout: int = DEFAULT_TIMEOUT, stdin: str | None = None) -> str:
-    """Run dx and return a result the model can act on.
+    """Run ssmd and return a result the model can act on.
 
     NO_COLOR because escape sequences in a tool result are noise the model then
-    tries to interpret as content. DX_ACTOR so the audit log distinguishes what
+    tries to interpret as content. SSMD_ACTOR so the audit log distinguishes what
     an agent did from what a human did - which is the entire point of having one.
     """
     env = {
         **os.environ,
         "NO_COLOR": "1",
-        "DX_ACTOR": os.environ.get("DX_ACTOR", "mcp"),
+        "SSMD_ACTOR": os.environ.get("SSMD_ACTOR", "mcp"),
         # An MCP call has no terminal, so anything that would prompt must fail
-        # rather than hang. dx's confirm() already refuses without a TTY; this is
+        # rather than hang. ssmd's confirm() already refuses without a TTY; this is
         # belt and braces for anything that shells out further.
         "DEBIAN_FRONTEND": "noninteractive",
     }
     try:
         p = subprocess.run(
-            [DX, *args], cwd=DX_ROOT, capture_output=True, text=True,
+            [SSMD, *args], cwd=SSMD_ROOT, capture_output=True, text=True,
             timeout=timeout, input=stdin, env=env,
         )
     except subprocess.TimeoutExpired:
-        return (f"TIMEOUT after {timeout}s: dx {' '.join(args)}\n"
+        return (f"TIMEOUT after {timeout}s: ssmd {' '.join(args)}\n"
                 f"The command is still running in the background or wedged. "
-                f"Check with dx_status() before retrying - retrying a slow "
-                f"`dx up` starts a second build.")
+                f"Check with ssmd_status() before retrying - retrying a slow "
+                f"`ssmd up` starts a second build.")
     except FileNotFoundError:
-        return f"ERROR: dx not found at {DX}. Is DX_ROOT correct?"
+        return f"ERROR: ssmd not found at {SSMD}. Is SSMD_ROOT correct?"
 
     out = (p.stdout or "") + (("\n[stderr]\n" + p.stderr) if p.stderr.strip() else "")
     if len(out) > MAX_OUTPUT:
@@ -149,27 +149,27 @@ def _run(args: list[str], timeout: int = DEFAULT_TIMEOUT, stdin: str | None = No
 # ── read-only: what is going on ─────────────────────────────────────────────
 
 @mcp.tool()
-def dx_describe() -> str:
+def ssmd_describe() -> str:
     """The stack's configuration: runtime, services, paths, agent limits.
 
     Call this first in a session. It tells you which language runtime, which
     database engine, and which verbs exist, so you do not have to guess whether
-    this project uses `dx artisan` or `dx manage`.
+    this project uses `ssmd artisan` or `ssmd manage`.
     """
     return _run(["describe"], timeout=T_DESCRIBE)
 
 
 @mcp.tool()
-def dx_status() -> str:
+def ssmd_status() -> str:
     """Container states and health for every service in the stack, plus URLs."""
     return _run(["status"], timeout=T_STATUS)
 
 
 @mcp.tool()
-def dx_preflight() -> str:
+def ssmd_preflight() -> str:
     """Check whether this machine can run the stack: docker, ports, DNS, disk, RAM.
 
-    Read-only. Run it when `dx up` failed and the reason was not obvious - most
+    Read-only. Run it when `ssmd up` failed and the reason was not obvious - most
     "the stack will not start" problems are a port conflict or a missing group
     membership, and this names them directly.
     """
@@ -177,8 +177,8 @@ def dx_preflight() -> str:
 
 
 @mcp.tool()
-def dx_doctor() -> str:
-    """Find drift between what dx believes and what is actually there.
+def ssmd_doctor() -> str:
+    """Find drift between what ssmd believes and what is actually there.
 
     Read-only, never fixes anything. Reports: containers that should be running
     and are not, instances whose worktree or database has disappeared, orphaned
@@ -189,7 +189,7 @@ def dx_doctor() -> str:
 
 
 @mcp.tool()
-def dx_verify(instance: str = "main") -> str:
+def ssmd_verify(instance: str = "main") -> str:
     """Check whether the app actually works right now - the strongest signal available.
 
     This is the tool to call after making a change. It checks, in order: the
@@ -202,13 +202,13 @@ def dx_verify(instance: str = "main") -> str:
     something", which no amount of reading the diff can.
 
     Args:
-        instance: "main", or a worktree/agent slug from dx_instances().
+        instance: "main", or a worktree/agent slug from ssmd_instances().
     """
     return _run(["verify", instance], timeout=T_VERIFY)
 
 
 @mcp.tool()
-def dx_logs(service: str = "app", tail: int = 200, pattern: str = "") -> str:
+def ssmd_logs(service: str = "app", tail: int = 200, pattern: str = "") -> str:
     """Container logs, optionally filtered.
 
     Args:
@@ -231,10 +231,10 @@ def dx_logs(service: str = "app", tail: int = 200, pattern: str = "") -> str:
 
 
 @mcp.tool()
-def dx_errors(service: str = "app", since: str = "30m") -> str:
+def ssmd_errors(service: str = "app", since: str = "30m") -> str:
     """Just the error lines from a service's log - the fast path to a diagnosis.
 
-    A convenience over dx_logs with the pattern that matters, across every log
+    A convenience over ssmd_logs with the pattern that matters, across every log
     format the runtimes emit (JSON level fields, PHP fatals, Python tracebacks,
     Go panics).
 
@@ -245,7 +245,7 @@ def dx_errors(service: str = "app", since: str = "30m") -> str:
     cmd = (f"docker logs --since {shlex.quote(since)} "
            f"$(docker ps -qf name={shlex.quote(service)} | head -1) 2>&1 | "
            f"grep -iE {shlex.quote(ERROR_PATTERN)} | tail -40")
-    p = subprocess.run(["bash", "-lc", cmd], cwd=DX_ROOT, capture_output=True, text=True, timeout=60)
+    p = subprocess.run(["bash", "-lc", cmd], cwd=SSMD_ROOT, capture_output=True, text=True, timeout=60)
     return (p.stdout or "").strip() or f"(no errors in {service} since {since})"
 
 
@@ -259,16 +259,16 @@ def db_query(sql: str) -> str:
     data rather than about code - it is faster and the result is easier to read.
 
     Writes are permitted (it is a dev database) but DROP and TRUNCATE are refused
-    here: if you need a clean table, you need a disposable database, and `dx test`
+    here: if you need a clean table, you need a disposable database, and `ssmd test`
     already gives the suite one.
     """
     lowered = sql.lower()
     for banned in ("drop database", "drop schema", "truncate"):
         if banned in lowered:
             return (f"REFUSED: '{banned}' is not available through this tool.\n"
-                    f"A test that needs a clean table should run through dx_test(), "
+                    f"A test that needs a clean table should run through ssmd_test(), "
                     f"which points the suite at a disposable database. To drop a "
-                    f"disposable database deliberately, use dx db:drop on the "
+                    f"disposable database deliberately, use ssmd db:drop on the "
                     f"command line - it snapshots first.")
     return _run(["db:query", sql], timeout=T_QUERY)
 
@@ -305,7 +305,7 @@ def mail_latest(limit: int = 10) -> str:
             data = json.load(r)
     except Exception as e:
         return (f"could not reach the mail catcher: {e}\n"
-                f"Is it running? dx_status() will say. It is in the 'mailpit' profile.")
+                f"Is it running? ssmd_status() will say. It is in the 'mailpit' profile.")
     msgs = data.get("messages", [])
     if not msgs:
         return "(no messages)"
@@ -320,7 +320,7 @@ def mail_latest(limit: int = 10) -> str:
 # ── instances ───────────────────────────────────────────────────────────────
 
 @mcp.tool()
-def dx_instances() -> str:
+def ssmd_instances() -> str:
     """Every worktree and agent instance: slug, branch, state, lease, URL."""
     return _run(["wt", "ls"], timeout=T_DESCRIBE)
 
@@ -362,7 +362,7 @@ def wt_remove(slug: str, drop_db: bool = False, confirm: bool = False) -> str:
     if not confirm:
         return ("REFUSED: pass confirm=True.\n"
                 "This removes a git worktree; uncommitted changes in it are lost. "
-                "Check first: dx_run('git -C <worktree> status').")
+                "Check first: ssmd_run('git -C <worktree> status').")
     args = ["wt", "rm", slug]
     if drop_db:
         args += ["--drop-db"]
@@ -384,7 +384,7 @@ def agent_spawn(branch: str, slug: str = "", owner: str = "claude",
     Args:
         branch: the branch to work on.
         slug: identifier and subdomain. Derived from the branch if omitted.
-        owner: who holds the lease. Shows in `dx agent ls` and the audit log.
+        owner: who holds the lease. Shows in `ssmd agent ls` and the audit log.
         ttl: lease duration, e.g. "4h", "30m".
         egress: "allowlist" (policy/allow-hosts.txt), "none" (no outbound at
             all), or "full" (normal networking - a development convenience, not a
@@ -416,8 +416,8 @@ def agent_diff(slug: str) -> str:
 def agent_run(slug: str, command: str) -> str:
     """Run one command inside an agent sandbox.
 
-    The sandbox has the project's toolchain, the worktree at /app, dx read-only
-    at /dx, and no route off the machine except the allowlist proxy.
+    The sandbox has the project's toolchain, the worktree at /app, ssmd read-only
+    at /ssmd, and no route off the machine except the allowlist proxy.
     """
     return _run(["agent", "run", slug, command], timeout=DEFAULT_TIMEOUT)
 
@@ -426,7 +426,7 @@ def agent_run(slug: str, command: str) -> str:
 def agent_audit(limit: int = 50) -> str:
     """The audit trail: what has actually been done to this stack, and by whom.
 
-    Every state-changing dx command appends here, tagged with the actor. This is
+    Every state-changing ssmd command appends here, tagged with the actor. This is
     how "what did the agent do" gets answered without relying on the agent's own
     account of it.
     """
@@ -440,17 +440,17 @@ def policy_check(command: str) -> str:
     Ask before running something you are unsure about. The answer names the
     alternative - the rules exist to redirect, not merely to forbid.
     """
-    script = f'. "{DX_ROOT}/lib/core.sh"; DX_ROOT="{DX_ROOT}"; . "{DX_ROOT}/lib/policy.sh"; ' \
+    script = f'. "{SSMD_ROOT}/lib/core.sh"; SSMD_ROOT="{SSMD_ROOT}"; . "{SSMD_ROOT}/lib/policy.sh"; ' \
              f'if reason=$(policy_check_command {shlex.quote(command)}); then ' \
              f'echo "ALLOWED"; else echo "DENIED: $reason"; fi'
-    p = subprocess.run(["bash", "-c", script], cwd=DX_ROOT, capture_output=True, text=True, timeout=30)
+    p = subprocess.run(["bash", "-c", script], cwd=SSMD_ROOT, capture_output=True, text=True, timeout=30)
     return (p.stdout or p.stderr or "").strip()
 
 
 # ── the small number of write operations ────────────────────────────────────
 
 @mcp.tool()
-def dx_up(preset: str = "default") -> str:
+def ssmd_up(preset: str = "default") -> str:
     """Start the stack.
 
     Args:
@@ -458,19 +458,19 @@ def dx_up(preset: str = "default") -> str:
             tools (+ database and cache web UIs), full (+ browser, MCP).
 
     Slow on a cold cache - it builds the runtime image and installs dependencies.
-    If it times out, call dx_status() rather than retrying: a second `dx up`
+    If it times out, call ssmd_status() rather than retrying: a second `ssmd up`
     starts a second build.
     """
     return _run(["up", preset], timeout=T_UP)
 
 
 @mcp.tool()
-def dx_test(args: str = "") -> str:
+def ssmd_test(args: str = "") -> str:
     """Run the project's test suite, pointed at a disposable database.
 
     Always use this rather than the framework's test runner directly. The bare
     runner reads whatever database the config names, and a suite that refreshes
-    the schema will then drop every table in the development database. dx creates
+    the schema will then drop every table in the development database. ssmd creates
     and targets `<db>_test` instead, and refuses to run if it cannot.
 
     Args:
@@ -480,7 +480,7 @@ def dx_test(args: str = "") -> str:
 
 
 @mcp.tool()
-def dx_run(command: str) -> str:
+def ssmd_run(command: str) -> str:
     """Run a command in the app container, as the invoking user.
 
     For anything the framework can answer - a REPL one-liner, a CLI command, a

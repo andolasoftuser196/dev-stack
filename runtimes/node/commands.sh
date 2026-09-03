@@ -1,11 +1,11 @@
-# runtimes/node/commands.sh - dx verbs for Node projects.
+# runtimes/node/commands.sh - ssmd verbs for Node projects.
 
 rt_display_name() { echo "Node ${STACK_RUNTIME_VERSION} (${STACK_RUNTIME_FRAMEWORK})"; }
 rt_verbs() { echo "npm pnpm yarn npx node vite next nest tsc"; }
 
 # NOT `sh -lc`. A login shell sources /etc/profile, which on Debian sets PATH
 # unconditionally - clobbering everything the image added. The go toolchain
-# (/usr/local/go/bin) and the python venv (/dx/cache/venv/bin) both vanish, and
+# (/usr/local/go/bin) and the python venv (/ssmd/cache/venv/bin) both vanish, and
 # the symptom is `go: not found` in a container that plainly has go in it.
 #
 # `docker exec` already applies the image's ENV, so a plain shell has the right
@@ -32,7 +32,7 @@ rt_deps_install() {
     if ! _has_lockfile; then
         warn "no lockfile in $APP_DIR - installing without one"
         hint "the result is not reproducible: another machine may resolve different"
-        hint "versions. Commit the lockfile this produces, then 'dx deps' is frozen."
+        hint "versions. Commit the lockfile this produces, then 'ssmd deps' is frozen."
         _node_in app "$m install"
         return
     fi
@@ -62,7 +62,7 @@ rt_migrate() {
 
 rt_test() {
     # Node suites rarely truncate a shared database, but the ones using
-    # testcontainers or a real Postgres do. Same rule as everywhere in dx: point
+    # testcontainers or a real Postgres do. Same rule as everywhere in ssmd: point
     # them at the disposable database, never the development one.
     local test_db="${DB_NAME}$(_cfg DATABASE_SAFETY_TEST_SUFFIX)"
     # The disposable-database check lives in lib/db.sh and reads its patterns
@@ -72,7 +72,7 @@ rt_test() {
     db_matches_patterns "$test_db" DATABASE_SAFETY_TEST_PATTERN || die \
         "refusing to run tests against '$test_db' - it does not match
       database_safety.test_pattern ($(_cfg DATABASE_SAFETY_TEST_PATTERN)).
-      Nothing in dx will point a suite that truncates tables at a database you
+      Nothing in ssmd will point a suite that truncates tables at a database you
       might care about."
     db_create_database "$test_db"
     audit "test.run" "db=$test_db"
@@ -104,7 +104,7 @@ rt_doctor_notes() {
     local m; m="$(_pm)"
     case "$m" in
         pnpm) [ -f "$APP_DIR/pnpm-lock.yaml" ] || warn "pnpm selected but no pnpm-lock.yaml" ;;
-        npm)  [ -f "$APP_DIR/package-lock.json" ] || warn "no package-lock.json - 'npm ci' will fail; run 'dx exec app npm install' once" ;;
+        npm)  [ -f "$APP_DIR/package-lock.json" ] || warn "no package-lock.json - 'npm ci' will fail; run 'ssmd exec app npm install' once" ;;
     esac
 }
 
@@ -116,6 +116,6 @@ rt_doctor_notes() {
 # 'django'` immediately after a successful install — because the install went to
 # the venv and the hook ran outside it.
 #
-# Every caller that runs a project command goes through this: hooks, dx run,
-# dx exec, and the per-instance equivalents.
+# Every caller that runs a project command goes through this: hooks, ssmd run,
+# ssmd exec, and the per-instance equivalents.
 rt_exec() { local svc="$1"; shift; dexec "$(container "$svc")" sh -c "$*"; }

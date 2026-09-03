@@ -2,7 +2,7 @@
 # demo-apps/ - the demo application per runtime.
 #
 # These must stay in step with the examples that point at them and with the
-# contract in demo-apps/README.md, or `dx up` on a fresh clone stops working - which
+# contract in demo-apps/README.md, or `ssmd up` on a fresh clone stops working - which
 # is the one thing they exist to guarantee.
 . "$(dirname "$(readlink -f "$0")")/../lib.sh"
 SB="$(mk_sandbox)"; trap 'rm_sandbox "$SB"' EXIT
@@ -44,7 +44,7 @@ reports() {  # reports <app> <key>
     grep -rqE "$2=|['\"]$2['\"]" "demo-apps/$1" 2>/dev/null
 }
 for a in $APPS; do
-    grep -rqF 'dx demo app' "demo-apps/$a" 2>/dev/null \
+    grep -rqF 'ssmd demo app' "demo-apps/$a" 2>/dev/null \
         && t_ok "demo-apps/$a renders the agreed first line" \
         || t_fail "demo-apps/$a renders the agreed first line"
     missing=""
@@ -85,14 +85,14 @@ for a in express nest vite python-plain go; do
 done
 
 t_section "no test configuration names a database"
-# A suite that names its own database eventually truncates the wrong one. dx
+# A suite that names its own database eventually truncates the wrong one. ssmd
 # supplies a disposable name in the environment instead.
 # code_only strips comments first: every one of these files explains at length
 # why it does NOT name a database, and matching the explanation would flag all
 # of them. See the note on code_only in tests/lib.sh.
 for f in $(find apps -name 'phpunit.xml' -o -name 'pytest.ini' -o -name 'pyproject.toml' 2>/dev/null); do
     if code_only "$f" | grep -qiE 'DB_DATABASE|DATABASE_URL|db_name'; then
-        t_fail "$f names no database" "it does - dx supplies a disposable one
+        t_fail "$f names no database" "it does - ssmd supplies a disposable one
 "
     else t_ok "$(basename "$(dirname "$f")")/$(basename "$f") names no database"; fi
 done

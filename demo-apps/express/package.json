@@ -1,5 +1,5 @@
 {
-  "name": "dx-demo-express",
+  "name": "ssmd-demo-express",
   "version": "1.0.0",
   "private": true,
   "engines": { "node": ">=20" },

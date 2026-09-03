@@ -1,8 +1,8 @@
 # Adding a language
 
-A runtime module teaches `dx` how to build, serve and operate one language stack.
+A runtime module teaches `ssmd` how to build, serve and operate one language stack.
 Adding PHP 7.2, Bun, Rust or Elixir means adding a directory here - never editing
-`dx`, `lib/` or `docker-compose.yml`.
+`ssmd`, `lib/` or `docker-compose.yml`.
 
 That constraint is the point. A driver with the application's language welded
 into it works fine until the first project that needs a second one, and the usual
@@ -18,15 +18,15 @@ document is the walkthrough.
 runtimes/<kind>/
   Dockerfile      accepts RUNTIME_VERSION and EXTRA_PACKAGES
   serve.conf      the web-server config (Caddy)
-  entrypoint.sh   installed as dx-entrypoint; roles serve|queue|scheduler|idle
-  commands.sh     sourced by dx; defines the rt_* functions
+  entrypoint.sh   installed as ssmd-entrypoint; roles serve|queue|scheduler|idle
+  commands.sh     sourced by ssmd; defines the rt_* functions
 ```
 
 ## The shape every runtime shares
 
-Caddy owns `$DX_PORT` and answers `$DX_HEALTHZ` itself. For `frankenphp` that is
+Caddy owns `$SSMD_PORT` and answers `$SSMD_HEALTHZ` itself. For `frankenphp` that is
 free - Caddy *is* the runtime. For the others, Caddy reverse-proxies to the app
-process on an inner `$DX_APP_PORT`.
+process on an inner `$SSMD_APP_PORT`.
 
 That front layer is not decoration. It is what keeps healthz answering while the
 application process is crash-looping, which is exactly when you need the
@@ -34,7 +34,7 @@ container to stay up so you can read its logs. Without it, compose restarts the
 container you are actively debugging.
 
 ```
-       :$DX_PORT                    127.0.0.1:$DX_APP_PORT
+       :$SSMD_PORT                    127.0.0.1:$SSMD_APP_PORT
   ─────────────────►  Caddy  ─────────────────────────────►  node / uvicorn / air
                         │
                         └── /healthz  200, always
@@ -45,7 +45,7 @@ container you are actively debugging.
 - **Never bake in a UID.** Containers run as `${HOST_UID}:${HOST_GID}` so files
   written into the bind-mounted repo stay editable on the host, and an image
   built for one developer's UID is useless to the next.
-- Redirect everything that wants `$HOME` to `/dx/cache`, which dx bind-mounts.
+- Redirect everything that wants `$HOME` to `/ssmd/cache`, which ssmd bind-mounts.
   The invoking UID has no `/etc/passwd` entry and therefore no home directory;
   the first tool that wants one otherwise fails with a confusing `EACCES`.
 - Put the dependency cache there too. A fresh worktree instance installing from a
@@ -53,10 +53,10 @@ container you are actively debugging.
   whether people use instances at all.
 
 ```dockerfile
-ENV HOME=/dx/cache/home \
-    <PKG>_CACHE=/dx/cache/<pkg> \
-    XDG_CONFIG_HOME=/dx/cache/config
-RUN mkdir -p /dx/cache && chmod -R 777 /dx
+ENV HOME=/ssmd/cache/home \
+    <PKG>_CACHE=/ssmd/cache/<pkg> \
+    XDG_CONFIG_HOME=/ssmd/cache/config
+RUN mkdir -p /ssmd/cache && chmod -R 777 /ssmd
 ```
 
 ## The entrypoint
@@ -67,7 +67,7 @@ shell).
 
 Two things every entrypoint should do:
 
-**Install the stack CA.** `/dx/ca/root.crt` is mounted read-only. Each language
+**Install the stack CA.** `/ssmd/ca/root.crt` is mounted read-only. Each language
 reads a different variable - `NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`,
 `CURL_CA_BUNDLE`, `REQUESTS_CA_BUNDLE`. Without it, server-side HTTPS to
 `https://*.<domain>` fails with an unknown-authority error that reads like an
@@ -80,12 +80,12 @@ queue stops draining.
 
 ## commands.sh
 
-Sourced into dx's shell, so it may use `log`, `die`, `dexec`, `container`,
+Sourced into ssmd's shell, so it may use `log`, `die`, `dexec`, `container`,
 `audit` and every `STACK_*` variable.
 
 | Function | Contract |
 |---|---|
-| `rt_display_name` | one line, for `dx describe` |
+| `rt_display_name` | one line, for `ssmd describe` |
 | `rt_verbs` | space-separated verbs `rt_dispatch` handles; feeds help and completion |
 | `rt_deps_present` | exit 0 if dependencies are installed |
 | `rt_deps_install` | install them, **from the lockfile** |
@@ -93,7 +93,7 @@ Sourced into dx's shell, so it may use `log`, `die`, `dexec`, `container`,
 | `rt_test` | the suite, **safely** - see below |
 | `rt_lint`, `rt_repl` | formatter, language shell |
 | `rt_dispatch` | runtime verbs; return 1 for anything unrecognised |
-| `rt_doctor_notes` | project-shape warnings for `dx doctor` |
+| `rt_doctor_notes` | project-shape warnings for `ssmd doctor` |
 
 ### `rt_deps_install` installs, it never updates
 
@@ -129,14 +129,14 @@ rt_test() {
 
 1. Add the directory and the four files.
 2. Add the inner-port default to the `case` in `lib/core.sh`'s `load_config`
-   (the only place `dx` knows runtime names, and only to default a number).
+   (the only place `ssmd` knows runtime names, and only to default a number).
 3. Teach `scaffold/scaffold.py`'s `detect()` the manifest that identifies it.
 4. Test:
 
 ```bash
-./dx describe                # does the module load?
-./dx build                   # does the image build?
-./dx up core && ./dx verify  # does it serve, and does healthz answer?
+./ssmd describe                # does the module load?
+./ssmd build                   # does the image build?
+./ssmd up core && ./ssmd verify  # does it serve, and does healthz answer?
 ```
 
 ## The four that ship

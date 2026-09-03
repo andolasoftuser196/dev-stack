@@ -6,7 +6,7 @@
 # contents of your repository, and "it needed it once" is how allowlists stop
 # meaning anything.
 #
-# Reload after editing:  dx exec egress kill -HUP 1
+# Reload after editing:  ssmd exec egress kill -HUP 1
 
 # The model API the agent talks to.
 .anthropic.com

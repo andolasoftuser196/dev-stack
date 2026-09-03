@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""dx init - detect a project's shape and render a dev-stack for it.
+"""ssmd init - detect a project's shape and render a dev-stack for it.
 
 Runs once per project. Everything it produces is plain text a human owns
 afterwards: a stack.yml, a .env, and (with --into) a copy of the toolkit.
@@ -24,7 +24,7 @@ from pathlib import Path
 try:
     from jinja2 import Environment, FileSystemLoader, StrictUndefined
 except ImportError:  # pragma: no cover - init.sh guarantees this
-    print("[dx init] jinja2 missing; run through 'dx init', not directly", file=sys.stderr)
+    print("[ssmd init] jinja2 missing; run through 'ssmd init', not directly", file=sys.stderr)
     raise SystemExit(1)
 
 
@@ -92,8 +92,8 @@ def detect(repo: Path) -> Detected:
         else:
             d.notes.append(
                 "composer.json found but no framework recognised - runtime.framework "
-                "is 'none', which means dx offers only the generic verbs. Set it by "
-                "hand if this is a framework dx knows (laravel, cakephp, symfony)."
+                "is 'none', which means ssmd offers only the generic verbs. Set it by "
+                "hand if this is a framework ssmd knows (laravel, cakephp, symfony)."
             )
 
         # The database driver the app actually configures, not the one we prefer.
@@ -161,7 +161,7 @@ def detect(repo: Path) -> Detected:
 
     if (repo / "docker-compose.yml").exists() or (repo / "compose.yaml").exists():
         d.notes.append(
-            "this project already has a docker-compose.yml. dx does not read it and "
+            "this project already has a docker-compose.yml. ssmd does not read it and "
             "does not replace it - but running both at once will fight over ports "
             "and container names. Decide which one owns the environment."
         )
@@ -196,13 +196,13 @@ def relpath(target: Path, start: Path) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser(
-        prog="dx init",
+        prog="ssmd init",
         description="Scaffold a dev-stack for a project.",
     )
-    ap.add_argument("--dx-root", required=True, help=argparse.SUPPRESS)
+    ap.add_argument("--ssmd-root", required=True, help=argparse.SUPPRESS)
     ap.add_argument("--into", metavar="PATH",
                     help="Copy the toolkit into PATH/dev-stack and configure it there. "
-                         "Without this, stack.yml is written where dx already lives.")
+                         "Without this, stack.yml is written where ssmd already lives.")
     ap.add_argument("--repo", metavar="PATH", default=None,
                     help="The application source. Defaults to the parent of the dev-stack.")
     ap.add_argument("--name", help="Stack name. Defaults to the repository directory name.")
@@ -214,18 +214,18 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true", help="Print what would be written")
     args = ap.parse_args()
 
-    dx_root = Path(args.dx_root).resolve()
+    ssmd_root = Path(args.ssmd_root).resolve()
 
     # Where the generated stack.yml will live.
     if args.into:
         dest = Path(args.into).resolve() / "dev-stack"
         repo = Path(args.repo).resolve() if args.repo else Path(args.into).resolve()
     else:
-        dest = dx_root
-        repo = Path(args.repo).resolve() if args.repo else dx_root.parent
+        dest = ssmd_root
+        repo = Path(args.repo).resolve() if args.repo else ssmd_root.parent
 
     if not repo.exists():
-        print(f"[dx init] ERROR: no such directory: {repo}", file=sys.stderr)
+        print(f"[ssmd init] ERROR: no such directory: {repo}", file=sys.stderr)
         return 1
 
     d = detect(repo)
@@ -265,19 +265,19 @@ def main() -> int:
     }
 
     env = Environment(
-        loader=FileSystemLoader(dx_root / "scaffold" / "templates"),
+        loader=FileSystemLoader(ssmd_root / "scaffold" / "templates"),
         undefined=StrictUndefined,
         keep_trailing_newline=True,
         trim_blocks=True,
         lstrip_blocks=True,
     )
 
-    print(f"[dx init] detected: {d.runtime} {d.version} / {d.framework or 'no framework'}")
-    print(f"[dx init] stack '{name}' at {domain}")
-    print(f"[dx init] repo     {repo}")
-    print(f"[dx init] into     {dest}")
+    print(f"[ssmd init] detected: {d.runtime} {d.version} / {d.framework or 'no framework'}")
+    print(f"[ssmd init] stack '{name}' at {domain}")
+    print(f"[ssmd init] repo     {repo}")
+    print(f"[ssmd init] into     {dest}")
     for n in d.notes:
-        print(f"[dx init] note: {n}")
+        print(f"[ssmd init] note: {n}")
 
     if args.dry_run:
         print("\n--- stack.yml ---")
@@ -288,12 +288,12 @@ def main() -> int:
     # overwritten by the copy.
     if args.into:
         if dest.exists() and not args.force:
-            print(f"[dx init] ERROR: {dest} already exists. Use --force to overwrite.",
+            print(f"[ssmd init] ERROR: {dest} already exists. Use --force to overwrite.",
                   file=sys.stderr)
             return 1
-        print(f"[dx init] copying the toolkit to {dest}")
+        print(f"[ssmd init] copying the toolkit to {dest}")
         shutil.copytree(
-            dx_root, dest, dirs_exist_ok=True,
+            ssmd_root, dest, dirs_exist_ok=True,
             # Never copy another project's state, secrets or caches.
             ignore=shutil.ignore_patterns(
                 "data", ".env", ".stack.env", ".venv", "__pycache__",
@@ -303,31 +303,31 @@ def main() -> int:
 
     stack_path = dest / "stack.yml"
     if stack_path.exists() and not args.force:
-        print(f"[dx init] ERROR: {stack_path} exists. Use --force to overwrite.", file=sys.stderr)
+        print(f"[ssmd init] ERROR: {stack_path} exists. Use --force to overwrite.", file=sys.stderr)
         return 1
 
     stack_path.write_text(env.get_template("stack.yml.j2").render(**ctx))
-    print(f"[dx init] wrote {stack_path}")
+    print(f"[ssmd init] wrote {stack_path}")
 
     env_path = dest / ".env"
     if not env_path.exists():
         shutil.copy(dest / ".env.example", env_path)
-        print(f"[dx init] wrote {env_path} (from .env.example)")
+        print(f"[ssmd init] wrote {env_path} (from .env.example)")
 
     gitignore = dest / ".gitignore"
     if not gitignore.exists():
         gitignore.write_text(env.get_template("gitignore.j2").render(**ctx))
-        print(f"[dx init] wrote {gitignore}")
+        print(f"[ssmd init] wrote {gitignore}")
 
-    (dest / "dx").chmod(0o755)
+    (dest / "ssmd").chmod(0o755)
 
     print(f"""
-[dx init] done.
+[ssmd init] done.
 
   cd {relpath(dest, Path.cwd())}
-  ./dx preflight        check this machine can run it
-  ./dx up               start the stack
-  ./dx urls             where everything is
+  ./ssmd preflight        check this machine can run it
+  ./ssmd up               start the stack
+  ./ssmd urls             where everything is
 
   Review stack.yml first - the detection is a starting point, not an answer.
   In particular check: runtime.docroot, services.database, and hooks.postStart.

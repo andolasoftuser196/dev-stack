@@ -15,7 +15,7 @@ class Application extends BaseApplication
     public function bootstrap(): void
     {
         parent::bootstrap();
-        Configure::write('debug', filter_var(dx_env('APP_DEBUG', 'true'), FILTER_VALIDATE_BOOL));
+        Configure::write('debug', filter_var(ssmd_env('APP_DEBUG', 'true'), FILTER_VALIDATE_BOOL));
 
         // Initialise the route collection.
         //

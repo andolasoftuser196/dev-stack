@@ -1,11 +1,11 @@
-# runtimes/go/commands.sh - dx verbs for Go projects.
+# runtimes/go/commands.sh - ssmd verbs for Go projects.
 
 rt_display_name() { echo "Go ${STACK_RUNTIME_VERSION}"; }
 rt_verbs() { echo "go air dlv staticcheck migrate"; }
 
 # NOT `sh -lc`. A login shell sources /etc/profile, which on Debian sets PATH
 # unconditionally - clobbering everything the image added. The go toolchain
-# (/usr/local/go/bin) and the python venv (/dx/cache/venv/bin) both vanish, and
+# (/usr/local/go/bin) and the python venv (/ssmd/cache/venv/bin) both vanish, and
 # the symptom is `go: not found` in a container that plainly has go in it.
 #
 # `docker exec` already applies the image's ENV, so a plain shell has the right
@@ -37,7 +37,7 @@ rt_test() {
     db_matches_patterns "$test_db" DATABASE_SAFETY_TEST_PATTERN || die \
         "refusing to run tests against '$test_db' - it does not match
       database_safety.test_pattern ($(_cfg DATABASE_SAFETY_TEST_PATTERN)).
-      Nothing in dx will point a suite that truncates tables at a database you
+      Nothing in ssmd will point a suite that truncates tables at a database you
       might care about."
     db_create_database "$test_db"
     audit "test.run" "db=$test_db"
@@ -50,7 +50,7 @@ rt_test() {
 }
 
 rt_lint() { _go_in app "gofmt -l -w . && go vet ./... && staticcheck ./... ${*:-}"; }
-rt_repl() { die "Go has no REPL. 'dx sh' gives you a shell in the app container."; }
+rt_repl() { die "Go has no REPL. 'ssmd sh' gives you a shell in the app container."; }
 
 rt_dispatch() {
     local verb="$1"; shift || true
@@ -72,6 +72,6 @@ rt_doctor_notes() {
 # 'django'` immediately after a successful install — because the install went to
 # the venv and the hook ran outside it.
 #
-# Every caller that runs a project command goes through this: hooks, dx run,
-# dx exec, and the per-instance equivalents.
+# Every caller that runs a project command goes through this: hooks, ssmd run,
+# ssmd exec, and the per-instance equivalents.
 rt_exec() { local svc="$1"; shift; dexec "$(container "$svc")" sh -c "$*"; }

@@ -1,12 +1,12 @@
 # The config database is a build artifact of config/*.yml. Marked binary so a
 # stray `git add -f` cannot produce an unreadable diff, and excluded from
 # export so an archive of the toolkit carries no machine's local state.
-config/dx.db      binary export-ignore
-config/dx.db-wal  binary export-ignore
-config/dx.db-shm  binary export-ignore
+config/ssmd.db      binary export-ignore
+config/ssmd.db-wal  binary export-ignore
+config/ssmd.db-shm  binary export-ignore
 
 # Shell and awk are text everywhere; forcing LF stops a Windows checkout from
 # producing scripts the container cannot execute.
 *.sh   text eol=lf
 *.awk  text eol=lf
-dx     text eol=lf
+ssmd   text eol=lf

@@ -3,16 +3,16 @@
 # a 502 and a red line in the log.
 #
 # The build cache is on the shared bind mount, so a second instance builds warm.
-# A cold `go build` on a large module is memory-hungry - check `dx preflight`
+# A cold `go build` on a large module is memory-hungry - check `ssmd preflight`
 # before raising agents.max_concurrent.
 #
-# Go has no REPL, so `dx repl` says so rather than opening something useless.
+# Go has no REPL, so `ssmd repl` says so rather than opening something useless.
 #
 # repo.root already points at the matching demo application, so this runs as-is
 # from a fresh clone:
 #
 #     cp examples/runtimes/go-service.stack.yml config/stack.yml
-#     dx config import && dx up core && dx urls
+#     ssmd config import && ssmd up core && ssmd urls
 #
 # For a real project, change repo.root and repo.git_root to point at it.
 
@@ -61,7 +61,7 @@ tools:
   mcp: true
 
 hooks:
-  # Dependencies are not listed here. `dx up` installs them through the runtime
+  # Dependencies are not listed here. `ssmd up` installs them through the runtime
   # module, which knows the right command for the package manager in use and
   # what to do when there is no lockfile yet. Put project-specific one-time
   # setup here instead.

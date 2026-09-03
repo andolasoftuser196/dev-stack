@@ -1,7 +1,7 @@
 # FastAPI with Alembic.
 #
 # The runtime runs 'uvicorn app.main:app --reload'. Point it elsewhere with:
-#     dx config set runtime.asgi_app 'myservice.api:app'
+#     ssmd config set runtime.asgi_app 'myservice.api:app'
 #
 # --reload watches the whole tree; on a large repo it can spin a core. The fix
 # is uvicorn's --reload-dir, not turning reload off.
@@ -10,7 +10,7 @@
 # from a fresh clone:
 #
 #     cp examples/runtimes/python-fastapi.stack.yml config/stack.yml
-#     dx config import && dx up core && dx urls
+#     ssmd config import && ssmd up core && ssmd urls
 #
 # For a real project, change repo.root and repo.git_root to point at it.
 
@@ -59,7 +59,7 @@ tools:
   mcp: true
 
 hooks:
-  # Dependencies are not listed here. `dx up` installs them through the runtime
+  # Dependencies are not listed here. `ssmd up` installs them through the runtime
   # module, which knows the right command for the package manager in use and
   # what to do when there is no lockfile yet. Put project-specific one-time
   # setup here instead.

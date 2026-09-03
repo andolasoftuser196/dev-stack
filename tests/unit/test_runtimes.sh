@@ -37,7 +37,7 @@ for kind in $KINDS; do
       [ -z "$miss" ] || { echo "missing:$miss"; exit 1; }
       [ -n "$(rt_display_name)" ] || { echo "rt_display_name is empty"; exit 1; }
       [ -n "$(rt_verbs)" ]        || { echo "rt_verbs is empty"; exit 1; }
-      # An unknown verb must return 1 so dx can print its own error rather than
+      # An unknown verb must return 1 so ssmd can print its own error rather than
       # the module swallowing it.
       rt_dispatch definitely-not-a-verb 2>/dev/null && { echo "rt_dispatch accepted a bogus verb"; exit 1; }
       exit 0 )
@@ -63,9 +63,9 @@ for kind in $KINDS; do
         || t_ok "Dockerfile pins every tool it installs"
 
     # healthz answered by the web server is the invariant everything else rests on.
-    grep -q 'DX_HEALTHZ' "runtimes/$kind/serve.conf" \
-        && t_ok "serve.conf answers \$DX_HEALTHZ itself" \
-        || t_fail "serve.conf answers \$DX_HEALTHZ itself"
+    grep -q 'SSMD_HEALTHZ' "runtimes/$kind/serve.conf" \
+        && t_ok "serve.conf answers \$SSMD_HEALTHZ itself" \
+        || t_fail "serve.conf answers \$SSMD_HEALTHZ itself"
     grep -q 'respond "ok" 200' "runtimes/$kind/serve.conf" \
         && t_ok "and answers it with a literal 200, not by proxying" \
         || t_fail "and answers it with a literal 200, not by proxying"
@@ -83,7 +83,7 @@ for kind in $KINDS; do
         && t_fail "Dockerfile bakes in no UID" || t_ok "Dockerfile bakes in no UID"
 
     # Caches must land on the shared bind mount, not in the image or the repo.
-    grep -q 'HOME=/dx/cache' "runtimes/$kind/Dockerfile" \
+    grep -q 'HOME=/ssmd/cache' "runtimes/$kind/Dockerfile" \
         && t_ok "HOME points at the shared cache" || t_fail "HOME points at the shared cache"
 done
 
@@ -92,9 +92,9 @@ t_section "project commands run through the runtime, not raw docker exec"
 # venv is not active — and a hook then fails with ModuleNotFoundError for a
 # package it just watched get installed.
 for pat in 'rt_exec app "\$h"' 'rt_exec app "\$\*"' 'rt_exec "\$local_svc"'; do
-    grep -qF "$(printf '%s' "$pat" | sed 's/\\//g')" dx \
-        && t_ok "dx uses rt_exec: $(printf '%s' "$pat" | sed 's/\\//g')" \
-        || t_fail "dx uses rt_exec: $(printf '%s' "$pat" | sed 's/\\//g')"
+    grep -qF "$(printf '%s' "$pat" | sed 's/\\//g')" ssmd \
+        && t_ok "ssmd uses rt_exec: $(printf '%s' "$pat" | sed 's/\\//g')" \
+        || t_fail "ssmd uses rt_exec: $(printf '%s' "$pat" | sed 's/\\//g')"
 done
 code_only lib/worktree.sh | grep -q 'rt_exec app' \
     && t_ok "instances use rt_exec too" || t_fail "instances use rt_exec too"
@@ -104,18 +104,18 @@ t_section "no non-interactive path uses a login shell"
 # image added - /usr/local/go/bin, the python venv, node's global bin. The
 # symptom is `go: not found` in a container that plainly has go in it.
 #
-# `dx sh` is exempt: it is interactive, and a profile banner is the point there.
-# The agent sandbox is exempt too, and restores PATH from DX_IMAGE_PATH.
-for f in dx lib/worktree.sh runtimes/*/commands.sh runtimes/*/entrypoint.sh; do
+# `ssmd sh` is exempt: it is interactive, and a profile banner is the point there.
+# The agent sandbox is exempt too, and restores PATH from SSMD_IMAGE_PATH.
+for f in ssmd lib/worktree.sh runtimes/*/commands.sh runtimes/*/entrypoint.sh; do
     hits="$(code_only "$f" | grep -n 'sh -lc' || true)"
     [ -z "$hits" ] && t_ok "$f runs commands in a plain shell" \
                    || t_fail "$f runs commands in a plain shell" "$hits
 "
 done
-grep -q 'DX_IMAGE_PATH' agent/sandbox/Dockerfile \
+grep -q 'SSMD_IMAGE_PATH' agent/sandbox/Dockerfile \
     && t_ok "the sandbox records the image PATH for its login shell" \
     || t_fail "the sandbox records the image PATH for its login shell"
-grep -q 'DX_IMAGE_PATH' agent/sandbox/sandbox-profile.sh \
+grep -q 'SSMD_IMAGE_PATH' agent/sandbox/sandbox-profile.sh \
     && t_ok "and its profile restores it" || t_fail "and its profile restores it"
 
 t_section "a missing lockfile is handled, not left to the package manager"

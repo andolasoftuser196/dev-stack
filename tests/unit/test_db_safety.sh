@@ -18,7 +18,7 @@ done
 t_section "{db} expands to this project's database, not a literal"
 assert_contains "$(db_disposable_patterns)" "app_dev_*" "{db} expanded"
 assert_not_contains "$(db_disposable_patterns)" "{db}" "no placeholder left"
-# Renaming the database must move the pattern with it, or dx would still be
+# Renaming the database must move the pattern with it, or ssmd would still be
 # willing to drop the old project's instance databases.
 config_set database.name other_dev stack >/dev/null; load_sandbox "$SB" local
 db_matches_patterns other_dev_x DATABASE_SAFETY_DISPOSABLE \

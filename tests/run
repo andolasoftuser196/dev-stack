@@ -34,7 +34,7 @@ run_shell() {
     FILES=$((FILES+1))
     printf '%s%s%s\n' "$B" "$f" "$O"
     out="$("$f" 2>&1)"
-    printf '%s\n' "$out" | grep -vE '^#SUMMARY|^\[dx\] (creating|first run)'
+    printf '%s\n' "$out" | grep -vE '^#SUMMARY|^\[ssmd\] (creating|first run)'
     s="$(printf '%s' "$out" | grep '^#SUMMARY' | tail -1)"
     if [ -z "$s" ]; then
         printf '  %sthe file did not finish - no summary line%s\n' "$R" "$O"

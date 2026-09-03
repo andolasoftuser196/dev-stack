@@ -5,7 +5,7 @@
 // package, so a hand-assembled project must provide it — otherwise
 // `Could not open input file: bin/console` follows a successful install.
 //
-// Run it through the container: dx console <command>
+// Run it through the container: ssmd console <command>
 
 use App\Kernel;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
