@@ -228,5 +228,47 @@ class TestInitWritesWhereConfigReads(unittest.TestCase):
             self._init_into(p)
 
 
+class TestClosingInstructions(unittest.TestCase):
+    """The last thing init prints is the thing a person acts on.
+
+    It used to render the destination relative to the current directory
+    unconditionally, so scaffolding into a temp dir printed
+
+        cd ../../../../../tmp/.../probe/dev-stack
+
+    Correct, unreadable, and it reads as though the tool lost the directory it
+    had just finished writing to.
+    """
+
+    def _run_init(self, project: Path) -> str:
+        import subprocess
+        r = subprocess.run(
+            [sys.executable, str(ROOT / "scaffold" / "scaffold.py"),
+             "--ssmd-root", str(ROOT), "--into", str(project)],
+            capture_output=True, text=True, cwd=str(ROOT))
+        self.assertEqual(r.returncode, 0, f"init failed:\n{r.stdout}\n{r.stderr}")
+        return r.stdout
+
+    def _cd_line(self, out: str) -> str:
+        for line in out.splitlines():
+            if line.strip().startswith("cd "):
+                return line.strip()[3:].strip()
+        self.fail(f"init printed no cd line:\n{out}")
+
+    def test_the_cd_line_is_not_a_ladder_of_parent_directories(self):
+        with Repo(**{"package.json": {"dependencies": {"next": "^15.0.0"}}}) as p:
+            target = self._cd_line(self._run_init(p))
+        self.assertNotIn("../..", target,
+                         f"the cd line climbs out of the tree instead of naming it: {target}")
+
+    def test_the_cd_line_points_at_the_scaffolded_directory(self):
+        # Whichever form it picks has to actually resolve to what was written.
+        with Repo(**{"package.json": {"dependencies": {"next": "^15.0.0"}}}) as p:
+            target = self._cd_line(self._run_init(p))
+            resolved = (ROOT / target).resolve() if not Path(target).is_absolute() else Path(target)
+            self.assertTrue((resolved / "config" / "stack.yml").is_file(),
+                            f"cd target has no config/stack.yml: {resolved}")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)
