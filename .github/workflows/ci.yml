@@ -22,7 +22,7 @@ jobs:
     name: syntax
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: bash -n
         run: |
@@ -46,7 +46,7 @@ jobs:
     name: no literals outside config/
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Every configuration value lives in config/defaults.yml and is read back
       # with _cfg. These two greps are the whole enforcement; an audit found 73
@@ -95,7 +95,7 @@ jobs:
     name: unit + python
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: install sqlite3
         run: sudo apt-get update -qq && sudo apt-get install -y -qq sqlite3
@@ -114,7 +114,7 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: install sqlite3
         run: sudo apt-get update -qq && sudo apt-get install -y -qq sqlite3
