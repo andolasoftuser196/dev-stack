@@ -181,5 +181,52 @@ class TestRendering(unittest.TestCase):
             self.assertIn(key, out.stdout, key)
 
 
+class TestInitWritesWhereConfigReads(unittest.TestCase):
+    """`ssmd init --into` must land the seed where lib/config.sh looks for it.
+
+    Getting this wrong does not fail. CONFIG_SEEDS reads config/stack.yml, the
+    copy of the toolkit brings its own along, and the scaffolded project comes
+    up as whatever the toolkit was last used for - a Next.js repo served by
+    FrankenPHP, reported by `ssmd describe` as if it were correct. Nothing
+    downstream can tell it apart from a real answer, which is what makes it
+    worth a test that runs the whole thing rather than one that checks a path
+    string.
+    """
+
+    def _init_into(self, project: Path) -> Path:
+        import subprocess
+        r = subprocess.run(
+            [sys.executable, str(ROOT / "scaffold" / "scaffold.py"),
+             "--ssmd-root", str(ROOT), "--into", str(project)],
+            capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, f"init failed:\n{r.stdout}\n{r.stderr}")
+        return project / "dev-stack"
+
+    def test_the_seed_lands_in_config(self):
+        with Repo(**{"package.json": {"dependencies": {"next": "^15.0.0"}}}) as p:
+            dest = self._init_into(p)
+            seed = dest / "config" / "stack.yml"
+            self.assertTrue(seed.is_file(), "no config/stack.yml - nothing will read the generated config")
+            self.assertFalse((dest / "stack.yml").exists(),
+                             "a stack.yml beside config/ is read by nothing and only misleads")
+
+    def test_the_seed_describes_the_project_not_the_toolkit(self):
+        # The assertion that would have caught the bug: the copied-in seed says
+        # frankenphp/laravel, the detected one says node/next.
+        with Repo(**{"package.json": {"dependencies": {"next": "^15.0.0"}}}) as p:
+            dest = self._init_into(p)
+            body = (dest / "config" / "stack.yml").read_text()
+        self.assertIn("kind: node", body)
+        self.assertIn("framework: next", body)
+        self.assertNotIn("frankenphp", body)
+
+    def test_init_does_not_demand_force_for_the_seed_it_just_copied(self):
+        # config/stack.yml always exists after the copytree. Testing existence
+        # after the copy rather than before makes --force mandatory on every
+        # init of a fresh project.
+        with Repo(**{"package.json": {"dependencies": {"next": "^15.0.0"}}}) as p:
+            self._init_into(p)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

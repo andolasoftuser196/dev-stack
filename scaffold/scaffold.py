@@ -284,6 +284,18 @@ def main() -> int:
         print(env.get_template("stack.yml.j2").render(**ctx))
         return 0
 
+    # config/stack.yml, not stack.yml: CONFIG_SEEDS in lib/config.sh reads the
+    # seeds out of config/, and a file written beside it is read by nothing.
+    # Writing to the wrong path does not fail - the scaffolded project quietly
+    # runs on whichever stack.yml the copy below brought with it, so a Next.js
+    # project comes up as whatever the toolkit was last used for.
+    stack_path = dest / "config" / "stack.yml"
+
+    # Whether the *user* already had one, asked before the copy. After it,
+    # config/stack.yml always exists - copytree just put the toolkit's own there
+    # - and testing it then would demand --force on every single init.
+    had_stack = stack_path.exists()
+
     # Copy the toolkit before writing config into it, so the config is not
     # overwritten by the copy.
     if args.into:
@@ -301,11 +313,11 @@ def main() -> int:
             ),
         )
 
-    stack_path = dest / "stack.yml"
-    if stack_path.exists() and not args.force:
+    if had_stack and not args.force:
         print(f"[ssmd init] ERROR: {stack_path} exists. Use --force to overwrite.", file=sys.stderr)
         return 1
 
+    stack_path.parent.mkdir(parents=True, exist_ok=True)
     stack_path.write_text(env.get_template("stack.yml.j2").render(**ctx))
     print(f"[ssmd init] wrote {stack_path}")
 
