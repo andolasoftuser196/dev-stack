@@ -156,7 +156,7 @@ def detect(repo: Path) -> Detected:
     else:
         d.notes.append(
             "no recognisable manifest (composer.json, package.json, pyproject.toml, "
-            "go.mod) - defaulting to PHP. Edit runtime.kind in stack.yml."
+            "go.mod) - defaulting to PHP. Edit runtime.kind in config/stack.yml."
         )
 
     if (repo / "docker-compose.yml").exists() or (repo / "compose.yaml").exists():
@@ -192,6 +192,22 @@ def relpath(target: Path, start: Path) -> str:
         return os.path.relpath(target, start)
     except ValueError:
         return str(target)
+
+
+def cd_hint(dest: Path) -> str:
+    """The form of a path a person is meant to paste into a shell.
+
+    relpath is right for the values written into stack.yml - those have to keep
+    working when the whole directory is moved - and wrong for this, where
+    scaffolding somewhere unrelated to the current directory produced
+
+        cd ../../../../../tmp/.../probe/dev-stack
+
+    which is correct, unreadable, and looks like the tool lost track of where it
+    put things. Shorter of the two, so a sibling directory still prints as one.
+    """
+    rel = relpath(dest, Path.cwd())
+    return rel if len(rel) <= len(str(dest)) else str(dest)
 
 
 def main() -> int:
@@ -336,12 +352,12 @@ def main() -> int:
     print(f"""
 [ssmd init] done.
 
-  cd {relpath(dest, Path.cwd())}
+  cd {cd_hint(dest)}
   ./ssmd preflight        check this machine can run it
   ./ssmd up               start the stack
   ./ssmd urls             where everything is
 
-  Review stack.yml first - the detection is a starting point, not an answer.
+  Review config/stack.yml first - the detection is a starting point, not an answer.
   In particular check: runtime.docroot, services.database, and hooks.postStart.
 """)
     return 0
