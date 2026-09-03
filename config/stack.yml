@@ -1,0 +1,96 @@
+# config/stack.yml - this project, seeded into the `stack` scope.
+#
+# Only what makes THIS project different from any other. Toolkit defaults -
+# image tags, ports, timeouts, thresholds, presets - live in defaults.yml and
+# should not be repeated here. Override one only when this project genuinely
+# needs a different value.
+#
+# Committed. Two developers with the same file get the same environment.
+# Machine-specific values go in hosts.yml; secrets go in .env.
+#
+# Edit and the next dx command re-imports automatically. Or, without editing:
+#     dx config set runtime.version 8.4
+#     dx config get runtime.version
+
+# ── identity ────────────────────────────────────────────────────────────────
+# Prefixes every container, network, volume and compose project, and seeds the
+# deterministic port offset. Short and DNS-safe.
+name: app
+
+# Root domain. The proxy derives app.<domain>, mail.<domain> … and every
+# instance gets <slug>.<domain>. Use a name you will never resolve on the public
+# internet - .test is reserved by RFC 6761 for exactly this.
+domain: app.test
+
+# ── the code ────────────────────────────────────────────────────────────────
+repo:
+  root: ..
+  git_root: ..
+  worktree_root: ../../worktrees
+
+# ── application runtime ─────────────────────────────────────────────────────
+# `kind` selects a module under runtimes/. Adding a language means adding a
+# directory there, not editing dx.
+runtime:
+  kind: frankenphp          # frankenphp | node | python | go
+  version: "8.3"
+  framework: laravel        # laravel | cakephp | symfony | none
+                            # node:   next | nest | vite | none
+                            # python: django | fastapi | flask | none
+  docroot: public
+  port: 80
+  healthz: /healthz
+  packages: []
+
+# ── backing services ────────────────────────────────────────────────────────
+# Each maps to a profile-gated service. "none" omits it entirely rather than
+# starting a container nothing uses.
+services:
+  database: mysql           # mysql | postgres | none
+  cache: redis              # redis | none
+  mail: mailpit             # mailpit | none
+  storage: minio            # minio | none
+  search: none              # meilisearch | none
+  queue: true
+  scheduler: true
+  vector: none              # pgvector | none
+
+database:
+  name: app_dev
+  user: app
+  # A dev database password is not a secret, and having it here is what lets a
+  # fresh checkout work. Anything that IS a secret belongs in .env.
+  password: app
+  version: "8.0"
+
+# ── routing ─────────────────────────────────────────────────────────────────
+routes:
+  app: app
+  optional: [mail, db, cache, s3, minio, vnc, mcp]
+
+tools:
+  db_ui: true
+  cache_ui: true
+  browser: true
+  mcp: true
+
+# ── lifecycle hooks ─────────────────────────────────────────────────────────
+# postCreate runs once per created container; postStart on every start. That
+# split is the difference between a 40-second boot and a 4-second one.
+hooks:
+  postCreate:
+    - "composer install --no-interaction --prefer-dist"
+  postStart:
+    - "php artisan migrate --force"
+  preDown: []
+  postInstance:
+    - "php artisan migrate --force"
+
+# ── agent sandboxing ────────────────────────────────────────────────────────
+agents:
+  max_concurrent: 4
+  cpus: "2.0"
+  memory: "4g"
+  pids_limit: 512
+  lease_ttl: "4h"
+  egress: allowlist         # none | allowlist | full

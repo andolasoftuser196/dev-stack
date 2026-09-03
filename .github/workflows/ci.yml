@@ -1,0 +1,126 @@
+# CI mirrors what CONTRIBUTING.md asks you to run locally: syntax, the two
+# literal-value audits, and the fast test tiers. Integration needs a real docker
+# daemon and minutes, so it runs on main and on demand rather than on every push
+# to a branch - a check people learn to ignore is worse than one that is absent.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  syntax:
+    name: syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: bash -n
+        run: |
+          bash -n dx
+          bash -n lib/*.sh
+          bash -n runtimes/*/commands.sh
+          bash -n tests/run tests/lib.sh tests/*/*.sh
+          bash -n scaffold/init.sh
+          bash -n agent/*/*.sh 2>/dev/null || true
+
+      - name: python syntax
+        run: python3 -m compileall -q mcp scaffold lib claude-plugin
+
+      - name: the seed reader still reads the seeds
+        run: |
+          for f in config/defaults.yml config/stack.yml config/hosts.yml; do
+            awk -v mode=dotted -f lib/yaml.awk "$f" > /dev/null
+          done
+
+  audit:
+    name: no literals outside config/
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Every configuration value lives in config/defaults.yml and is read back
+      # with _cfg. These two greps are the whole enforcement; an audit found 73
+      # such literals once, and this is what keeps them from coming back.
+      # `[$]{` rather than `\$\{` so the pattern means the same thing whatever
+      # grep the runner ships.
+      - name: no literal image tags
+        run: |
+          if grep -rnE '^[[:space:]]*image:' docker-compose*.yml | grep -v '[$]{'; then
+            echo "::error::literal image tag in a compose file - move it to config/defaults.yml and interpolate"
+            exit 1
+          fi
+
+      - name: no literal service ports
+        run: |
+          if grep -rnE '\b(3306|5432|6379|8025|9000)\b' dx lib/*.sh docker-compose*.yml \
+               | grep -vE '[$][{]|[{][$]|^[^:]+:[0-9]+:[[:space:]]*#'; then
+            echo "::error::literal port outside config/ - move it to config/defaults.yml and read it with _cfg"
+            exit 1
+          fi
+
+      # Two exemptions, and only these. hooks.* is optional and legitimately
+      # empty, so a fallback there defaults nothing. repo.git_root is optional
+      # and documented as defaulting to repo.root - the fallback *is* the
+      # documented behaviour. Every other ${STACK_*:-} hides a key that should
+      # exist in config/defaults.yml, which is how one value ends up with two
+      # sources of truth that drift.
+      - name: no fallback masking a missing config key
+        run: |
+          if grep -rnE '[$][{]STACK_[A-Z_]+:-' dx lib/*.sh runtimes/*/commands.sh \
+               | grep -vE 'STACK_HOOKS_[A-Z_]+:-|STACK_REPO_GIT_ROOT:-'; then
+            echo "::error::\${STACK_*:-fallback} hides a missing key - add the key to config/defaults.yml instead"
+            exit 1
+          fi
+
+      # data/ holds a CA private key, database files and whatever an agent
+      # downloaded; config/dx.db is a build artifact of the seeds.
+      - name: nothing that should be gitignored is tracked
+        run: |
+          if git ls-files | grep -E '^(data/|config/dx\.db|\.stack\.env$|\.env$)'; then
+            echo "::error::machine-local state is tracked - see .gitignore"
+            exit 1
+          fi
+
+  test:
+    name: unit + python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install sqlite3
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sqlite3
+
+      # jinja2 and pyyaml are dx init's dependencies; without them the
+      # scaffolder tests skip themselves and CI would pass without running them.
+      - name: install the scaffolder's dependencies
+        run: python3 -m pip install --quiet -r scaffold/requirements.txt
+
+      - name: tests/run
+        run: NO_COLOR=1 tests/run
+
+  integration:
+    name: integration
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install sqlite3
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sqlite3
+
+      - name: install the scaffolder's dependencies
+        run: python3 -m pip install --quiet -r scaffold/requirements.txt
+
+      - name: tests/run --integration
+        run: NO_COLOR=1 tests/run --integration

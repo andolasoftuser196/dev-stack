@@ -1,0 +1,72 @@
+# A Vite SPA with no backend of its own - it talks to an API elsewhere.
+#
+# services.database: none is the point of this example. dx starts no database
+# container at all rather than an idle one, and `dx db` says plainly that this
+# project has none.
+#
+# Vite binds 5173 and must be told --host 0.0.0.0 to be reachable from outside
+# the container; the runtime entrypoint already passes it.
+#
+# repo.root already points at the matching demo application, so this runs as-is
+# from a fresh clone:
+#
+#     cp examples/runtimes/node-vite.stack.yml config/stack.yml
+#     dx config import && dx up core && dx urls
+#
+# For a real project, change repo.root and repo.git_root to point at it.
+
+name: vite-app
+domain: vite-app.test
+
+repo:
+  root: demo-apps/vite
+  git_root: .
+  worktree_root: data/worktrees
+
+runtime:
+  kind: node
+  version: "22"
+  framework: vite
+  docroot: dist
+  port: 80
+  app_port: 5173
+  healthz: /healthz
+  packages: []
+
+services:
+  database: none
+  cache: redis
+  mail: mailpit
+  storage: none
+  search: none
+  queue: false
+  scheduler: false
+  vector: none
+
+routes:
+  app: app
+  optional: [mail, db, cache, s3, minio, vnc, mcp]
+
+tools:
+  db_ui: false
+  cache_ui: true
+  browser: true
+  mcp: true
+
+hooks:
+  # Dependencies are not listed here. `dx up` installs them through the runtime
+  # module, which knows the right command for the package manager in use and
+  # what to do when there is no lockfile yet. Put project-specific one-time
+  # setup here instead.
+  postCreate: []
+  postStart: []
+  preDown: []
+  postInstance: []
+
+agents:
+  max_concurrent: 4
+  cpus: "2.0"
+  memory: "4g"
+  pids_limit: 512
+  lease_ttl: "4h"
+  egress: allowlist

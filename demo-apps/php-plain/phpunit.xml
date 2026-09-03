@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  No <env> block pointing at a database, and that is deliberate. dx forces
+  DB_DATABASE to a disposable name in the environment before invoking the
+  runner, precisely because a phpunit.xml that names the wrong database is how a
+  suite ends up truncating the one you were working in.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php" colors="true">
+  <testsuites>
+    <testsuite name="demo">
+      <directory>tests</directory>
+    </testsuite>
+  </testsuites>
+</phpunit>

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "dx-devstack": {
+      "command": "python3",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/../mcp/server.py"],
+      "env": {
+        "DX_ROOT": "${CLAUDE_PLUGIN_ROOT}/..",
+        "DX_ACTOR": "claude-code"
+      }
+    }
+  }
+}

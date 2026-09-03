@@ -1,0 +1,495 @@
+# Base stack. Every service except the proxy and the app sits behind a profile,
+# and dx computes the profile set from stack.yml - so this one file serves a
+# PHP+MySQL project and a Go+Postgres project without a conditional in sight.
+#
+# Every value here is an interpolation. Not one image tag, port or tuning
+# number is written literally - they all come from the config database via
+# lib/core.sh. Adding a literal to this file is a bug: put it in
+# config/defaults.yml instead.
+#
+# Run it through `dx`, never `docker compose` directly: compose alone does not
+# know HOST_UID/HOST_GID, the profile set the configuration implies, the derived
+# port offset, or any of the post-start work. A raw `docker compose up` here starts a
+# subtly different stack, and the difference shows up hours later as a
+# permissions error on a file the app wrote.
+
+x-labels: &labels
+  dx.stack: "${STACK_NAME}"
+  dx.managed: "true"
+
+# The app, its queue worker and its scheduler are the same image with the same
+# mounts and a different command. Anchoring that shape means a change to the
+# runtime environment cannot apply to the web process but miss the worker -
+# which is how "it works in the browser but the job fails" happens.
+x-app-base: &app-base
+  image: "${APP_IMAGE}"
+  build:
+    context: ./runtimes/${STACK_RUNTIME_KIND}
+    args:
+      # The full base image, resolved from runtime_images.<kind> in config with
+      # {version} substituted - so a language bump is one config key, not a
+      # Dockerfile edit.
+      BASE_IMAGE: "${RUNTIME_BASE_IMAGE}"
+      EXTRA_PACKAGES: "${STACK_RUNTIME_PACKAGES:-}"
+      # Only the go runtime's Dockerfile declares these; the others ignore them.
+      AIR_VERSION: "${STACK_GO_TOOLS_AIR}"
+      DELVE_VERSION: "${STACK_GO_TOOLS_DELVE}"
+      STATICCHECK_VERSION: "${STACK_GO_TOOLS_STATICCHECK}"
+  # No UID baked into the image - it runs as whoever invoked dx, so files it
+  # writes into the bind-mounted repo stay editable on the host. `?run via dx`
+  # is the guard that makes a stray `docker compose up` fail loudly instead of
+  # silently starting everything as root.
+  user: "${HOST_UID:?run dx, not docker compose}:${HOST_GID:?run dx, not docker compose}"
+  working_dir: /app
+  init: true
+  environment:
+    DX_STACK: "${STACK_NAME}"
+    DX_DOMAIN: "${STACK_DOMAIN}"
+    DX_RUNTIME: "${STACK_RUNTIME_KIND}"
+    DX_FRAMEWORK: "${STACK_RUNTIME_FRAMEWORK}"
+    DX_DOCROOT: "${STACK_RUNTIME_DOCROOT}"
+    DX_PORT: "${STACK_RUNTIME_PORT}"
+    # The inner port the app process itself listens on, behind the runtime's
+    # Caddy. Irrelevant to frankenphp (Caddy *is* the runtime) and load-bearing
+    # for node/python/go.
+    DX_APP_PORT: "${DX_APP_PORT}"
+    DX_HEALTHZ: "${STACK_RUNTIME_HEALTHZ}"
+    DX_INSTANCE: "main"
+    # Per-instance python venv. Ignored by the other runtimes.
+    DX_VENV: "/dx/cache/venv/main"
+    # Command overrides from config (commands.*). Empty unless set; each
+    # runtime falls back to what runtime.framework implies.
+    DX_START_CMD: "${STACK_COMMANDS_START}"
+    DX_QUEUE_CMD: "${STACK_COMMANDS_QUEUE}"
+    DX_SCHEDULE_CMD: "${STACK_COMMANDS_SCHEDULE}"
+    DX_ASGI_APP: "${STACK_COMMANDS_ASGI_APP}"
+    DX_WSGI_APP: "${STACK_COMMANDS_WSGI_APP}"
+    DX_CELERY_APP: "${STACK_COMMANDS_CELERY_APP}"
+    DX_SETTINGS_MODULE: "${STACK_COMMANDS_SETTINGS_MODULE}"
+    XDEBUG_MODE: "${XDEBUG_MODE}"
+    # Read by php.dev.ini through ${...} interpolation, so a limit change is a
+    # config change rather than an image rebuild. Harmless to the other runtimes.
+    PHP_MEMORY_LIMIT: "${PHP_MEMORY_LIMIT}"
+    PHP_MAX_EXECUTION: "${PHP_MAX_EXECUTION}"
+    PHP_POST_MAX: "${PHP_POST_MAX}"
+    PHP_UPLOAD_MAX: "${PHP_UPLOAD_MAX}"
+    PHP_MAX_INPUT_VARS: "${PHP_MAX_INPUT_VARS}"
+    PHP_OPCACHE_MEMORY: "${PHP_OPCACHE_MEMORY}"
+    PHP_OPCACHE_FILES: "${PHP_OPCACHE_FILES}"
+    PHP_TIMEZONE: "${PHP_TIMEZONE}"
+    DX_REQUEST_BODY_MAX: "${PHP_REQUEST_BODY}"
+    # Connection details are injected as process environment rather than written
+    # into the app's own .env, because process env wins in every runtime we
+    # support and because a dev stack that edits the repo's .env is a dev stack
+    # that will one day commit it.
+    # Driver names, derived from the configured engines. A framework needs to be
+    # told which driver to use; it will not infer it from a host being present.
+    DB_CONNECTION: "${DB_CONNECTION}"
+    DATABASE_URL: "${DATABASE_URL}"
+    # Doctrine and a few others want the server version rather than probing for
+    # it. It is exactly database.version, so there is no reason to make anyone
+    # restate it in an app .env where it would drift.
+    DB_SERVER_VERSION: "${STACK_DATABASE_VERSION:-}"
+    CACHE_DRIVER: "${CACHE_DRIVER}"
+    CACHE_STORE: "${CACHE_DRIVER}"
+    SESSION_DRIVER: "${SESSION_DRIVER}"
+    QUEUE_CONNECTION: "${QUEUE_CONNECTION}"
+    REDIS_CLIENT: "${REDIS_CLIENT}"
+    MAIL_MAILER: "${MAIL_MAILER}"
+    FILESYSTEM_DISK: "${FILESYSTEM_DISK}"
+    DB_HOST: "${DB_ENGINE}"
+    DB_PORT: "${DB_INTERNAL_PORT}"
+    DB_DATABASE: "${DB_NAME}"
+    DB_USERNAME: "${DB_USER}"
+    DB_PASSWORD: "${DB_PASSWORD}"
+    REDIS_HOST: "redis"
+    REDIS_PORT: "${PORT_REDIS}"
+    REDIS_DB: "0"
+    MAIL_HOST: "mailpit"
+    MAIL_PORT: "${PORT_MAIL_SMTP}"
+    S3_ENDPOINT: "http://minio:${PORT_MINIO_S3}"
+    S3_KEY: "${S3_KEY}"
+    S3_SECRET: "${S3_SECRET}"
+    S3_BUCKET: "${S3_BUCKET}"
+  volumes:
+    - "${APP_DIR}:/app"
+    # The proxy owns the local CA. Mounting its root into every app container is
+    # what lets server-side HTTP calls to https://*.${STACK_DOMAIN} validate
+    # instead of failing with an unknown-authority error that reads like a bug in
+    # the app.
+    - ./data/proxy/caddy/pki/authorities/local:/dx/ca:ro
+    - ./data/build-cache:/dx/cache
+  networks: [ default ]
+  labels: *labels
+
+services:
+
+  # ── front proxy ───────────────────────────────────────────────────────────
+  # Owns host 80/443, terminates TLS with Caddy's internal CA, routes by
+  # hostname. It is the only service with published web ports: the app, every
+  # worktree instance and every agent sandbox listen internal-only, and
+  # reverse_proxy preserves the original Host so one app-side config serves
+  # app.<domain>, <slug>.<domain> and <agent>.<domain> alike.
+  proxy:
+    image: "${IMAGE_PROXY}"
+    container_name: "${STACK_NAME}-dev-proxy"
+    restart: unless-stopped
+    environment:
+      DEV_DOMAIN: "${STACK_DOMAIN}"
+      APP_UPSTREAM: "main:${STACK_RUNTIME_PORT}"
+      APP_SUB: "${STACK_ROUTES_APP}"
+      # Upstream ports for the tool UIs. In config because they are properties
+      # of those images, and the Caddyfile must not restate them.
+      PORT_MAIL_UI: "${PORT_MAIL_UI}"
+      PORT_DB_UI: "${PORT_DB_UI}"
+      PORT_CACHE_UI: "${PORT_CACHE_UI}"
+      PORT_MINIO_S3: "${PORT_MINIO_S3}"
+      PORT_MINIO_CONSOLE: "${PORT_MINIO_CONSOLE}"
+      PORT_BROWSER_NOVNC: "${PORT_BROWSER_NOVNC}"
+      PORT_MCP: "${PORT_MCP_INTERNAL}"
+    ports:
+      - "${PROXY_BIND}:${PROXY_HTTP_PORT}:80"
+      - "${PROXY_BIND}:${PROXY_HTTPS_PORT}:443"
+    volumes:
+      - ./caddy/proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy/proxy/sites:/etc/caddy/sites:ro
+      - ./data/proxy:/data
+      - ./data/caddy-config:/config
+    networks:
+      default:
+        aliases:
+          # Containers resolving these names reach the proxy, so server-side code
+          # calling its own public URL works from inside the network too.
+          - "${STACK_ROUTES_APP}.${STACK_DOMAIN}"
+      # Joined so it can serve the browser's VNC UI, which lives on the isolated
+      # network and has no other route out.
+      no-egress: {}
+    labels: *labels
+
+  # ── application ───────────────────────────────────────────────────────────
+  app:
+    <<: *app-base
+    container_name: "${STACK_NAME}-dev-app"
+    restart: unless-stopped
+    healthcheck:
+      # Answered by the web server, not the framework. A red healthcheck must
+      # mean "container down", not "the app returned 500" - otherwise compose
+      # restarts a container whose only problem is a syntax error you are
+      # actively fixing.
+      test: ["CMD", "sh", "-c",
+             "curl -fsS http://localhost:${STACK_RUNTIME_PORT}${STACK_RUNTIME_HEALTHZ} || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    # `main` on BOTH networks, and it matters on both.
+    #
+    # Compose gives every service the alias of its service name, and every
+    # instance also calls its app service "app" - so `app` round-robins across
+    # the base stack and every running instance. On the isolated network that
+    # meant a sandbox verifying "its" app hit someone else's; on the default
+    # network it meant the PROXY did, so https://app.<domain> served whichever
+    # container answered first. Fixing only one of the two left the more visible
+    # half of the bug in place.
+    networks:
+      default:
+        aliases: [ "main" ]
+      no-egress:
+        aliases: [ "main" ]
+
+  queue:
+    <<: *app-base
+    container_name: "${STACK_NAME}-dev-queue"
+    profiles: [ "queue" ]
+    restart: unless-stopped
+    command: [ "dx-entrypoint", "queue" ]
+    environment:
+      DX_ROLE: "queue"
+      WORKER_MAX_RUNTIME: "${WORKER_MAX_RUNTIME}"
+      QUEUE_TRIES: "${QUEUE_TRIES}"
+      QUEUE_TIMEOUT: "${QUEUE_TIMEOUT}"
+    depends_on:
+      app: { condition: service_started }
+
+  scheduler:
+    <<: *app-base
+    container_name: "${STACK_NAME}-dev-scheduler"
+    profiles: [ "scheduler" ]
+    restart: unless-stopped
+    command: [ "dx-entrypoint", "scheduler" ]
+    environment:
+      DX_ROLE: "scheduler"
+    depends_on:
+      app: { condition: service_started }
+
+  # ── databases (one of, selected by stack.yml services.database) ───────────
+  mysql:
+    image: "${DB_IMAGE}"
+    container_name: "${STACK_NAME}-dev-mysql"
+    profiles: [ "mysql" ]
+    restart: unless-stopped
+    command:
+      - --character-set-server=${TUNE_MYSQL_CHARSET}
+      - --collation-server=${TUNE_MYSQL_COLLATE}
+      # Dev boxes run several stacks; the default 128M buffer pool plus a
+      # per-worktree database each is what pushes a 16 GB box into swap.
+      - --innodb-buffer-pool-size=${TUNE_MYSQL_BUFFER}
+      - --max-connections=${TUNE_MYSQL_CONNS}
+    environment:
+      MYSQL_ROOT_PASSWORD: "${DB_PASSWORD}"
+      MYSQL_DATABASE: "${DB_NAME}"
+      MYSQL_USER: "${DB_USER}"
+      MYSQL_PASSWORD: "${DB_PASSWORD}"
+    ports: [ "${DB_BIND}:${DB_PORT}:${DB_INTERNAL_PORT}" ]
+    volumes:
+      # data/db/<engine>, not data/db.
+      #
+      # Both engines used to mount the same directory, so switching
+      # services.database left the other one's files behind and the new engine
+      # refused to start:
+      #
+      #   --initialize specified but the data directory has files in it. Aborting.
+      #
+      # Which names neither the cause nor the fix. Per-engine directories mean
+      # switching is reversible and each keeps its own data.
+      - ./data/db/mysql:/var/lib/mysql
+      - ./data/snapshots:/snapshots
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${DB_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks: [ default ]
+    labels: *labels
+
+  postgres:
+    image: "${DB_IMAGE}"
+    container_name: "${STACK_NAME}-dev-postgres"
+    profiles: [ "postgres" ]
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "${DB_NAME}"
+      POSTGRES_USER: "${DB_USER}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD}"
+    ports: [ "${DB_BIND}:${DB_PORT}:${DB_INTERNAL_PORT}" ]
+    volumes:
+      # Per-engine, for the reason spelled out on the mysql service above.
+      - ./data/db/postgres:/var/lib/postgresql/data
+      - ./data/snapshots:/snapshots
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks: [ default ]
+    labels: *labels
+
+  # ── cache ─────────────────────────────────────────────────────────────────
+  # Logical databases 1-15 are handed out one per worktree/agent instance
+  # (lib/worktree.sh), which is why maxmemory is set here and not per instance:
+  # sixteen instances sharing one 256M budget is the intended behaviour.
+  redis:
+    image: "${IMAGE_REDIS}"
+    container_name: "${STACK_NAME}-dev-redis"
+    profiles: [ "redis" ]
+    restart: unless-stopped
+    command: [ "redis-server", "--appendonly", "yes",
+               "--maxmemory", "${TUNE_REDIS_MAXMEM}",
+               "--maxmemory-policy", "${TUNE_REDIS_POLICY}" ]
+    ports: [ "${CACHE_BIND}:${CACHE_PORT}:${PORT_REDIS}" ]
+    volumes: [ "./data/cache:/data" ]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [ default ]
+    labels: *labels
+
+  # ── mail ──────────────────────────────────────────────────────────────────
+  # Every outbound mail lands here and nowhere else. This is not a convenience:
+  # it is the only reliable way to assert on mail an app sends, and it removes
+  # any path by which a dev stack could email a real customer.
+  mailpit:
+    image: "${IMAGE_MAILPIT}"
+    container_name: "${STACK_NAME}-dev-mailpit"
+    profiles: [ "mailpit" ]
+    restart: unless-stopped
+    environment:
+      MP_MAX_MESSAGES: "${TUNE_MAIL_MAX}"
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    volumes: [ "./data/state:/data" ]
+    networks: [ default, no-egress ]
+    labels: *labels
+
+  # ── object storage ────────────────────────────────────────────────────────
+  minio:
+    image: "${IMAGE_MINIO}"
+    container_name: "${STACK_NAME}-dev-minio"
+    profiles: [ "minio" ]
+    restart: unless-stopped
+    command: [ "server", "/data", "--console-address", ":${PORT_MINIO_CONSOLE}" ]
+    environment:
+      MINIO_ROOT_USER: "${S3_KEY}"
+      MINIO_ROOT_PASSWORD: "${S3_SECRET}"
+    ports: [ "${DB_BIND}:${S3_PORT}:${PORT_MINIO_S3}" ]
+    volumes: [ "./data/storage:/data" ]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [ default ]
+    labels: *labels
+
+  # ── search / vector (opt-in) ──────────────────────────────────────────────
+  meilisearch:
+    image: "${IMAGE_MEILI}"
+    container_name: "${STACK_NAME}-dev-meilisearch"
+    profiles: [ "meilisearch" ]
+    restart: unless-stopped
+    environment:
+      MEILI_ENV: development
+      MEILI_NO_ANALYTICS: "true"
+    volumes: [ "./data/state/meili:/meili_data" ]
+    networks: [ default ]
+    labels: *labels
+
+  pgvector:
+    image: "${IMAGE_PGVECTOR}"
+    container_name: "${STACK_NAME}-dev-pgvector"
+    profiles: [ "pgvector" ]
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: vectors
+      POSTGRES_USER: "${DB_USER}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD}"
+    volumes: [ "./data/state/pgvector:/var/lib/postgresql/data" ]
+    networks: [ default ]
+    labels: *labels
+
+  # ── developer UIs (profile: tools) ────────────────────────────────────────
+  adminer:
+    image: "${IMAGE_DB_UI}"
+    container_name: "${STACK_NAME}-dev-adminer"
+    profiles: [ "tools" ]
+    restart: unless-stopped
+    environment:
+      # Auto-login. A login form between a developer and their own dev database
+      # is pure friction, and it is the reason people end up running ad-hoc SQL
+      # as root in a shell instead.
+      ADMINER_DEFAULT_SERVER: "${DB_ENGINE}"
+      DB_USER: "${DB_USER}"
+      DB_PASSWORD: "${DB_PASSWORD}"
+      DB_NAME: "${DB_NAME}"
+      ADMINER_PLUGINS: "login-password-less"
+      ADMINER_DESIGN: "dracula"
+    volumes:
+      - ./caddy/adminer-login.php:/var/www/html/plugins-enabled/login.php:ro
+    networks: [ default ]
+    labels: *labels
+
+  cache-ui:
+    image: "${IMAGE_CACHE_UI}"
+    container_name: "${STACK_NAME}-dev-cache-ui"
+    profiles: [ "tools" ]
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: "local:redis:${PORT_REDIS}"
+    networks: [ default ]
+    labels: *labels
+
+  # ── headed browser (profile: browser) ─────────────────────────────────────
+  # Playwright with a visible display, reachable at https://vnc.<domain>/. It is
+  # the agent's eyes: the way a model confirms a UI change actually rendered
+  # rather than asserting it did.
+  #
+  # `no-egress` only. The browser can reach the app under test and nothing else
+  # - not because the pages are untrusted, but because everything an app renders
+  # (ticket text, comments, uploads) is prompt-injection input, and the blast
+  # radius has to end at this network boundary.
+  browser:
+    image: "${IMAGE_BROWSER}"
+    container_name: "${STACK_NAME}-dev-browser"
+    profiles: [ "browser" ]
+    restart: unless-stopped
+    # Chromium's renderer uses shared memory heavily; the 64MB default /dev/shm
+    # makes it crash on any page with real content.
+    shm_size: "${TUNE_BROWSER_SHM}"
+    ipc: host
+    user: "${HOST_UID}:${HOST_GID}"
+    working_dir: /work
+    command: [ "/dx/browser-entrypoint.sh" ]
+    environment:
+      DX_DOMAIN: "${STACK_DOMAIN}"
+      SCREEN: "${TUNE_BROWSER_SCREEN}"
+      NOVNC_PORT: "${PORT_BROWSER_NOVNC}"
+      VNC_PORT: "${PORT_BROWSER_VNC}"
+    volumes:
+      - ./agent/sandbox/browser-entrypoint.sh:/dx/browser-entrypoint.sh:ro
+      - "${APP_DIR}:/work"
+      - ./data/state/browser:/home/pwuser
+      - ./data/proxy/caddy/pki/authorities/local:/dx/ca:ro
+    networks: [ no-egress ]
+    labels: *labels
+
+  # ── stack-control MCP server (profile: mcp) ───────────────────────────────
+  # Exposes dx to Claude Code as tools. It mounts the docker socket, which makes
+  # it host-root-equivalent. That is irreducible - managing containers is the
+  # job - and it is why it binds to loopback and sits behind a profile rather
+  # than being on by default.
+  mcp:
+    image: "${IMAGE_MCP}"
+    container_name: "${STACK_NAME}-dev-mcp"
+    profiles: [ "mcp" ]
+    restart: unless-stopped
+    working_dir: /dx
+    command: [ "sh", "-c", "pip install --quiet --no-cache-dir -r /dx/mcp/requirements.txt && python /dx/mcp/server.py --http --port ${PORT_MCP_INTERNAL}" ]
+    environment:
+      DX_ROOT: /dx
+      DX_ACTOR: "mcp"
+    ports: [ "127.0.0.1:${MCP_PORT}:${PORT_MCP_INTERNAL}" ]
+    volumes:
+      - .:/dx
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks: [ default ]
+    labels: *labels
+
+  # ── egress proxy (profile: egress) ────────────────────────────────────────
+  # The only route to the internet for agent sandboxes. See agent/egress/.
+  egress:
+    build:
+      context: ./agent/egress
+      args:
+        BASE_IMAGE: "${IMAGE_EGRESS_BASE}"
+    image: "${EGRESS_IMAGE}"
+    container_name: "${STACK_NAME}-dev-egress"
+    profiles: [ "egress", "agent" ]
+    restart: unless-stopped
+    volumes:
+      - ./policy/allow-hosts.txt:/etc/egress/allow-hosts.txt:ro
+    environment:
+      EGRESS_PORT: "${PORT_EGRESS}"
+      EGRESS_CONNECT_PORTS: "${STACK_EGRESS_CONNECT_PORTS}"
+      EGRESS_MAX_CLIENTS: "${STACK_EGRESS_MAX_CLIENTS}"
+      EGRESS_TIMEOUT: "${STACK_EGRESS_TIMEOUT}"
+    networks:
+      # Two memberships, and that is the whole design: sandboxes sit on
+      # no-egress and can reach only this container; this container sits on
+      # default and can reach the internet. Nothing else bridges the two.
+      no-egress: {}
+      default: {}
+    labels: *labels
+
+networks:
+  default:
+    name: "${STACK_NAME}-dev"
+
+  # `internal: true` removes the external route entirely - containers here reach
+  # each other and nothing else, and DNS for outside names does not even resolve.
+  # This is the mechanism behind every isolation claim in docs/AGENTS.md; it is
+  # enforced by the kernel, not by an allowlist someone can forget to update.
+  no-egress:
+    name: "${STACK_NAME}-dev-isolated"
+    internal: true

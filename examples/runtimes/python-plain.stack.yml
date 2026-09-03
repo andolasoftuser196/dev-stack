@@ -1,0 +1,78 @@
+# Plain Python - a worker, a script runner, or a framework dx does not know.
+#
+# With framework: none and no start_cmd the runtime serves a directory listing.
+# That is a deliberate placeholder rather than a guess; set the real command:
+#     dx config set runtime.start_cmd 'python main.py'
+#
+# The demo app here already provides main.py.
+#
+# services.database: none - add one when the service needs it.
+#
+# repo.root already points at the matching demo application, so this runs as-is
+# from a fresh clone:
+#
+#     cp examples/runtimes/python-plain.stack.yml config/stack.yml
+#     dx config import && dx up core && dx urls
+#
+# For a real project, change repo.root and repo.git_root to point at it.
+
+name: py-svc
+domain: py-svc.test
+
+repo:
+  root: demo-apps/python-plain
+  git_root: .
+  worktree_root: data/worktrees
+
+runtime:
+  kind: python
+  version: "3.12"
+  framework: none
+  docroot: static
+  port: 80
+  app_port: 8000
+  healthz: /healthz
+  packages: []
+
+# With framework: none there is nothing to derive a start command from, so it is
+# set explicitly. The demo app provides main.py.
+commands:
+  start: "python main.py"
+
+services:
+  database: none
+  cache: redis
+  mail: mailpit
+  storage: none
+  search: none
+  queue: false
+  scheduler: false
+  vector: none
+
+routes:
+  app: app
+  optional: [mail, db, cache, s3, minio, vnc, mcp]
+
+tools:
+  db_ui: false
+  cache_ui: true
+  browser: true
+  mcp: true
+
+hooks:
+  # Dependencies are not listed here. `dx up` installs them through the runtime
+  # module, which knows the right command for the package manager in use and
+  # what to do when there is no lockfile yet. Put project-specific one-time
+  # setup here instead.
+  postCreate: []
+  postStart: []
+  preDown: []
+  postInstance: []
+
+agents:
+  max_concurrent: 4
+  cpus: "2.0"
+  memory: "4g"
+  pids_limit: 512
+  lease_ttl: "4h"
+  egress: allowlist

@@ -1,0 +1,44 @@
+{
+  "_comment_policy": [
+    "config.policy.advisories.block is OFF here, and it must not be in a real project.",
+    "",
+    "This demo ships no composer.lock (a generated one would be most of the",
+    "repository by volume), so `composer install` falls back to `update` and",
+    "resolves fresh. Composer refuses to install anything carrying an open",
+    "security advisory, and at any moment some transitive dependency of a",
+    "framework has one \u2014 so the demo would break weekly for reasons that say",
+    "nothing about dx.",
+    "",
+    "A real project commits a lockfile, installs from it, and leaves this alone."
+  ],
+  "name": "dx/demo-laravel",
+  "type": "project",
+  "require": {
+    "php": "^8.2",
+    "laravel/framework": "^11.0"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^11.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "App\\": "app/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Tests\\": "tests/"
+    }
+  },
+  "config": {
+    "optimize-autoloader": true,
+    "sort-packages": true,
+    "policy": {
+      "advisories": {
+        "block": false
+      }
+    }
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}

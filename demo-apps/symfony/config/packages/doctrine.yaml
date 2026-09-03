@@ -1,0 +1,17 @@
+doctrine:
+  dbal:
+    # DATABASE_URL is injected by dx, assembled from the connection details it
+    # already knows. Not written here, and not read from the app's own .env:
+    # each worktree and agent instance gets its own database, and a URL baked
+    # into a committed file would point every one of them at the base stack's.
+    url: '%env(resolve:DATABASE_URL)%'
+    # Pinned so Doctrine does not have to guess from the server it happens to
+    # reach; the value follows services.database.
+    server_version: '%env(default:doctrine_default_version:DB_SERVER_VERSION)%'
+  orm:
+    auto_generate_proxy_classes: true
+    naming_strategy: doctrine.orm.naming_strategy.underscore_number_aware
+    auto_mapping: false
+
+parameters:
+  doctrine_default_version: '8.0'

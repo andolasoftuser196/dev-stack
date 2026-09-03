@@ -1,0 +1,85 @@
+# Laravel. The most common shape, and the one most of the safety rules in
+# policy/ were written against.
+#
+# Two things bite Laravel projects specifically:
+#
+#   APP_KEY comes from the app's own .env, not from here. dx does not set it,
+#   because an imported database's encrypted columns were encrypted under a
+#   particular key and changing it makes every read of them throw. Generate it
+#   once with `dx run 'php artisan key:generate'`, then leave it alone.
+#
+#   The queue worker caches the booted framework. A code change reaches the web
+#   process immediately and the worker never - `dx recreate queue` after any
+#   change a job executes.
+#
+# repo.root already points at the matching demo application, so this runs as-is
+# from a fresh clone:
+#
+#     cp examples/runtimes/frankenphp-laravel.stack.yml config/stack.yml
+#     dx config import && dx up core && dx urls
+#
+# For a real project, change repo.root and repo.git_root to point at it.
+
+name: laravel-app
+domain: laravel-app.test
+
+repo:
+  root: demo-apps/laravel
+  git_root: .
+  worktree_root: data/worktrees
+
+runtime:
+  kind: frankenphp
+  version: "8.3"
+  framework: laravel
+  docroot: public
+  port: 80
+  app_port: 0
+  healthz: /healthz
+  packages: []
+
+services:
+  database: mysql
+  cache: redis
+  mail: mailpit
+  storage: minio
+  search: none
+  queue: true
+  scheduler: true
+  vector: none
+
+database:
+  name: laravel_app_dev
+  user: laravel_app
+  password: laravel_app
+  version: "8.0"
+
+routes:
+  app: app
+  optional: [mail, db, cache, s3, minio, vnc, mcp]
+
+tools:
+  db_ui: true
+  cache_ui: true
+  browser: true
+  mcp: true
+
+hooks:
+  # Dependencies are not listed here. `dx up` installs them through the runtime
+  # module, which knows the right command for the package manager in use and
+  # what to do when there is no lockfile yet. Put project-specific one-time
+  # setup here instead.
+  postCreate: []
+  postStart:
+    - "php artisan migrate --force"
+  preDown: []
+  postInstance:
+    - "php artisan migrate --force"
+
+agents:
+  max_concurrent: 4
+  cpus: "2.0"
+  memory: "4g"
+  pids_limit: 512
+  lease_ttl: "4h"
+  egress: allowlist

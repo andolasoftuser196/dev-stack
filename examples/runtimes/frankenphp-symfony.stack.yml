@@ -1,0 +1,80 @@
+# Symfony with Doctrine and Messenger.
+#
+# The queue role runs 'messenger:consume async'. For a different transport,
+# override the command rather than editing the runtime module:
+#     dx config set runtime.queue_cmd 'php bin/console messenger:consume mine'
+#
+# APP_ENV and APP_DEBUG come from the app's own .env; dx injects only the
+# connection details.
+#
+# repo.root already points at the matching demo application, so this runs as-is
+# from a fresh clone:
+#
+#     cp examples/runtimes/frankenphp-symfony.stack.yml config/stack.yml
+#     dx config import && dx up core && dx urls
+#
+# For a real project, change repo.root and repo.git_root to point at it.
+
+name: symfony-app
+domain: symfony-app.test
+
+repo:
+  root: demo-apps/symfony
+  git_root: .
+  worktree_root: data/worktrees
+
+runtime:
+  kind: frankenphp
+  version: "8.3"
+  framework: symfony
+  docroot: public
+  port: 80
+  app_port: 0
+  healthz: /healthz
+  packages: []
+
+services:
+  database: postgres
+  cache: redis
+  mail: mailpit
+  storage: minio
+  search: none
+  queue: true
+  scheduler: false
+  vector: none
+
+database:
+  name: symfony_app_dev
+  user: symfony_app
+  password: symfony_app
+  version: "16"
+
+routes:
+  app: app
+  optional: [mail, db, cache, s3, minio, vnc, mcp]
+
+tools:
+  db_ui: true
+  cache_ui: true
+  browser: true
+  mcp: true
+
+hooks:
+  # Dependencies are not listed here. `dx up` installs them through the runtime
+  # module, which knows the right command for the package manager in use and
+  # what to do when there is no lockfile yet. Put project-specific one-time
+  # setup here instead.
+  postCreate: []
+  postStart:
+    - "php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration"
+  preDown: []
+  postInstance:
+    - "php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration"
+
+agents:
+  max_concurrent: 4
+  cpus: "2.0"
+  memory: "4g"
+  pids_limit: 512
+  lease_ttl: "4h"
+  egress: allowlist

@@ -1,0 +1,34 @@
+# Egress allowlist for agent sandboxes. One host per line; a leading dot matches
+# subdomains. Everything not listed is refused by the proxy, and a sandbox has no
+# route around it - the isolated network has no gateway at all.
+#
+# Keep this short. Every entry is a place a prompt-injected agent could send the
+# contents of your repository, and "it needed it once" is how allowlists stop
+# meaning anything.
+#
+# Reload after editing:  dx exec egress kill -HUP 1
+
+# The model API the agent talks to.
+.anthropic.com
+
+# Package registries. Present because a sandbox that cannot install dependencies
+# cannot verify its own work - which is the entire point of the sandbox.
+.packagist.org
+repo.packagist.org
+.npmjs.org
+registry.npmjs.org
+.pypi.org
+files.pythonhosted.org
+proxy.golang.org
+sum.golang.org
+
+# Source hosting, for fetching the branch and pushing a review branch back.
+github.com
+.github.com
+codeload.github.com
+objects.githubusercontent.com
+
+# Deliberately NOT here, and worth saying why: general web search, package
+# mirrors you have not vetted, pastebins, and any host belonging to your own
+# production systems. An agent that can reach production from a sandbox has a
+# sandbox in name only.

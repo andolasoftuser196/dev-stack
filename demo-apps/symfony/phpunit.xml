@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- No database name; dx provides a disposable one in the environment. -->
+<phpunit bootstrap="vendor/autoload.php" colors="true">
+  <testsuites>
+    <testsuite name="app"><directory>tests</directory></testsuite>
+  </testsuites>
+</phpunit>

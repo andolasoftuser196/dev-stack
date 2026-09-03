@@ -1,0 +1,96 @@
+# Front proxy. Owns host 80/443, terminates TLS with Caddy's internal CA, routes
+# by hostname to the app, the tool UIs, and every worktree / agent instance.
+#
+# Every port below is {$VAR} rather than a literal: those are properties of the
+# upstream images, they live in the config database, and compose passes them in.
+# A literal here would silently disagree with config the day an image changes.
+#
+# It is the single CA owner. The root lands at
+#   data/proxy/caddy/pki/authorities/local/root.crt
+# and is mounted read-only into every app container, so server-side calls to
+# https://*.{$DEV_DOMAIN} validate instead of failing with an unknown-authority
+# error that reads like an application bug.
+#
+# The app and every instance listen internal-only on their runtime port with no
+# published host ports; reverse_proxy preserves the original Host header, so one
+# app-side config serves app.<domain>, <slug>.<domain> and <agent>.<domain>.
+{
+	# Force the internal CA for every host. Without it Caddy attempts ACME
+	# against a domain that does not exist publicly and fails on every boot.
+	local_certs
+
+	# Serve HTTP and HTTPS both, rather than 308-ing HTTP to HTTPS. Plain HTTP
+	# over the LAN or through an SSH tunnel is a normal access path for a dev
+	# stack, and forcing the redirect breaks it for anyone who has not installed
+	# the CA yet.
+	auto_https disable_redirects
+}
+
+# flush_interval -1 disables response buffering. Streamed downloads, SSE,
+# websocket upgrades, Vite HMR and MCP's streamable-HTTP transport all appear to
+# hang without it, and the symptom (a request that never completes) points
+# nowhere near the proxy.
+(upstream) {
+	reverse_proxy {args[0]} {
+		flush_interval -1
+		header_up X-Dx-Instance {args[1]}
+	}
+}
+
+http://{$APP_SUB}.{$DEV_DOMAIN}, https://{$APP_SUB}.{$DEV_DOMAIN} {
+	import upstream {$APP_UPSTREAM} main
+}
+
+http://mail.{$DEV_DOMAIN}, https://mail.{$DEV_DOMAIN} {
+	reverse_proxy mailpit:{$PORT_MAIL_UI}
+}
+
+http://db.{$DEV_DOMAIN}, https://db.{$DEV_DOMAIN} {
+	reverse_proxy adminer:{$PORT_DB_UI}
+}
+
+http://cache.{$DEV_DOMAIN}, https://cache.{$DEV_DOMAIN} {
+	reverse_proxy cache-ui:{$PORT_CACHE_UI}
+}
+
+http://s3.{$DEV_DOMAIN}, https://s3.{$DEV_DOMAIN} {
+	reverse_proxy minio:{$PORT_MINIO_S3} {
+		flush_interval -1
+	}
+}
+
+http://minio.{$DEV_DOMAIN}, https://minio.{$DEV_DOMAIN} {
+	reverse_proxy minio:{$PORT_MINIO_CONSOLE}
+}
+
+# Live view of the headed browser. This is how a human checks what an agent's
+# end-to-end run is actually doing, in real time, rather than reading its account
+# of it afterwards.
+http://vnc.{$DEV_DOMAIN}, https://vnc.{$DEV_DOMAIN} {
+	reverse_proxy browser:{$PORT_BROWSER_NOVNC}
+}
+
+# Stack-control MCP server. Streamable-HTTP transport, so no buffering.
+http://mcp.{$DEV_DOMAIN}, https://mcp.{$DEV_DOMAIN} {
+	reverse_proxy mcp:{$PORT_MCP} {
+		flush_interval -1
+	}
+}
+
+# Per-instance routes for `dx wt` and `dx agent`, written into sites/ by
+# lib/worktree.sh and lib/agent.sh and removed on teardown.
+#
+# 00-placeholder.caddy keeps this glob non-empty: an import matching zero files
+# is a hard error in Caddy and would crash-loop the proxy on a fresh checkout,
+# taking the whole stack with it before anyone has created an instance.
+import sites/*.caddy
+
+# Catch-all, matched only when no named site above did. This is what makes the
+# stack usable before anyone edits a hosts file: http://<this-host-ip>/ reaches
+# the app directly with no DNS at all.
+#
+# Keep it last. An address-only site block is the lowest-priority match in Caddy,
+# so the named vhosts always win - but a reader should not have to know that.
+:80 {
+	import upstream {$APP_UPSTREAM} main
+}

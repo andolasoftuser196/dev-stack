@@ -1,0 +1,20 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>dx demo</title>
+<!--
+  The status lines are in the HTML, not assembled by the script.
+
+  This app has no backend, so everything it can report is known at build time -
+  and a page that only fills itself in from JavaScript is an empty element to
+  curl, to the integration test, and to anything else that is not a browser.
+  The script below enhances it with the values only the client knows.
+-->
+<pre id="out">dx demo app
+runtime=node framework=vite version=dev
+instance=main
+database=skipped
+cache=skipped
+mail=skipped
+storage=skipped
+</pre>
+<script type="module" src="/src/main.js"></script>

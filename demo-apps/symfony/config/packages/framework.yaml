@@ -1,0 +1,8 @@
+framework:
+  secret: '%env(APP_SECRET)%'
+  test: false
+  # Sessions off: the demo is stateless, and a session handler is one more thing
+  # that fails for a reason unrelated to what is being demonstrated.
+  session: false
+  php_errors:
+    log: true

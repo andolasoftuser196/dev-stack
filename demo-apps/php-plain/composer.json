@@ -1,0 +1,7 @@
+{
+  "name": "dx/demo-php-plain",
+  "description": "The smallest thing that proves the frankenphp runtime works.",
+  "require": { "php": ">=8.2" },
+  "require-dev": { "phpunit/phpunit": "^11" },
+  "autoload": { "psr-4": { "Dx\\Demo\\": "src/" } }
+}

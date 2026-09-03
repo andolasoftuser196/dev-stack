@@ -1,0 +1,17 @@
+#!/usr/bin/env php
+<?php
+
+// Symfony's console entrypoint. Part of the application skeleton, not of any
+// package, so a hand-assembled project must provide it — otherwise
+// `Could not open input file: bin/console` follows a successful install.
+//
+// Run it through the container: dx console <command>
+
+use App\Kernel;
+use Symfony\Bundle\FrameworkBundle\Console\Application;
+
+require_once dirname(__DIR__).'/vendor/autoload_runtime.php';
+
+return function (array $context) {
+    return new Application(new Kernel($context['APP_ENV'], (bool) $context['APP_DEBUG']));
+};

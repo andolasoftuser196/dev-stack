@@ -1,0 +1,78 @@
+# CakePHP. Serves from webroot/, not public/ - the single most common reason a
+# CakePHP stack 404s on every route.
+#
+# `bin/cake` must run inside the container (`dx cake ...`). Run on the host it
+# reads the host's PHP and the host's absent database config, then reports a
+# connection error rather than saying what actually went wrong.
+#
+# repo.root already points at the matching demo application, so this runs as-is
+# from a fresh clone:
+#
+#     cp examples/runtimes/frankenphp-cakephp.stack.yml config/stack.yml
+#     dx config import && dx up core && dx urls
+#
+# For a real project, change repo.root and repo.git_root to point at it.
+
+name: cake-app
+domain: cake-app.test
+
+repo:
+  root: demo-apps/cakephp
+  git_root: .
+  worktree_root: data/worktrees
+
+runtime:
+  kind: frankenphp
+  version: "8.3"
+  framework: cakephp
+  docroot: webroot
+  port: 80
+  app_port: 0
+  healthz: /healthz
+  packages: []
+
+services:
+  database: postgres
+  cache: redis
+  mail: mailpit
+  storage: minio
+  search: none
+  queue: true
+  scheduler: false
+  vector: none
+
+database:
+  name: cake_app_dev
+  user: cake_app
+  password: cake_app
+  version: "16"
+
+routes:
+  app: app
+  optional: [mail, db, cache, s3, minio, vnc, mcp]
+
+tools:
+  db_ui: true
+  cache_ui: true
+  browser: true
+  mcp: true
+
+hooks:
+  # Dependencies are not listed here. `dx up` installs them through the runtime
+  # module, which knows the right command for the package manager in use and
+  # what to do when there is no lockfile yet. Put project-specific one-time
+  # setup here instead.
+  postCreate: []
+  postStart:
+    - "bin/cake migrations migrate"
+  preDown: []
+  postInstance:
+    - "bin/cake migrations migrate"
+
+agents:
+  max_concurrent: 4
+  cpus: "2.0"
+  memory: "4g"
+  pids_limit: 512
+  lease_ttl: "4h"
+  egress: allowlist

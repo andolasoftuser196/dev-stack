@@ -1,0 +1,45 @@
+name: Runtime request
+description: Support for a language or framework dx does not have yet
+labels: [runtime]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Adding a runtime means adding a directory under `runtimes/` - never
+        editing `dx`. `runtimes/_contract.md` is the whole contract, and
+        CONTRIBUTING.md lists what "complete" means. If you are willing to write
+        it, say so; the answer to "would you take a PR for this" is almost
+        always yes.
+
+  - type: input
+    id: runtime
+    attributes:
+      label: Language or framework
+      placeholder: Bun, Rails, Elixir/Phoenix, PHP 7.2
+    validations:
+      required: true
+
+  - type: textarea
+    id: serve
+    attributes:
+      label: How it is served in development
+      description: >
+        The web server, the port, and how it hot-reloads. The important part is
+        how `/healthz` can be answered by the web server rather than the
+        framework - that invariant is what keeps a syntax error from restarting
+        the container you are debugging.
+    validations:
+      required: true
+
+  - type: textarea
+    id: verbs
+    attributes:
+      label: Its everyday commands
+      description: "The equivalents of `dx artisan`, `dx npm`, `dx manage` - install, test, lint, repl, migrate."
+
+  - type: checkboxes
+    id: willing
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to write this runtime module

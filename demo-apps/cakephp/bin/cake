@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# CakePHP's console entrypoint.
+#
+# It ships with the application skeleton, not with the framework package, so a
+# project assembled by hand has to provide it — `bin/cake: not found` after a
+# perfectly successful `composer install` is otherwise a genuinely confusing
+# five minutes.
+#
+# Run it through the container: dx cake <command>
+exec php "$(dirname "$0")/cake.php" "$@"

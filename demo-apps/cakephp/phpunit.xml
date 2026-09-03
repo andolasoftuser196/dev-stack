@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- No database name here on purpose; dx supplies a disposable one. -->
+<phpunit bootstrap="config/bootstrap.php" colors="true">
+  <testsuites>
+    <testsuite name="app"><directory>tests/TestCase</directory></testsuite>
+  </testsuites>
+</phpunit>

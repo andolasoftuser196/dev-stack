@@ -1,0 +1,3 @@
+status:
+  path: /
+  controller: App\Controller\StatusController::index

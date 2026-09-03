@@ -1,0 +1,269 @@
+# One instance: a git worktree running as its own compose project against the
+# base stack's database, cache, mail and storage.
+#
+# Used by both `dx wt` (a branch you are working on) and `dx agent` (a branch an
+# agent is working on). They are the same thing with different defaults - an
+# agent instance adds the sandbox container below and drops its network egress.
+# Keeping them one file means a fix to instance networking cannot land for
+# worktrees and miss agents.
+#
+# Never invoked directly. lib/instance.sh sets every INSTANCE_* variable and
+# picks the compose project name.
+
+x-labels: &labels
+  dx.stack: "${STACK_NAME}"
+  dx.managed: "true"
+  dx.instance: "${INSTANCE_SLUG}"
+  dx.kind: "${INSTANCE_KIND}"
+
+services:
+
+  app:
+    image: "${APP_IMAGE}"
+    container_name: "${PROJECT}-${INSTANCE_KIND}-${INSTANCE_SLUG}-app"
+    user: "${HOST_UID:?run via dx}:${HOST_GID:?run via dx}"
+    working_dir: /app
+    init: true
+    restart: unless-stopped
+    environment:
+      DX_STACK: "${STACK_NAME}"
+      DX_DOMAIN: "${STACK_DOMAIN}"
+      DX_RUNTIME: "${STACK_RUNTIME_KIND}"
+      DX_FRAMEWORK: "${STACK_RUNTIME_FRAMEWORK}"
+      DX_DOCROOT: "${STACK_RUNTIME_DOCROOT}"
+      DX_PORT: "${STACK_RUNTIME_PORT}"
+      DX_APP_PORT: "${DX_APP_PORT}"
+      DX_HEALTHZ: "${STACK_RUNTIME_HEALTHZ}"
+      # Everything that must not collide between instances keys off this.
+      DX_INSTANCE: "${INSTANCE_SLUG}"
+      # Its own python venv: two branches with different dependencies must not
+      # overwrite each other's site-packages.
+      DX_VENV: "/dx/cache/venv/${INSTANCE_SLUG}"
+      # Command overrides from config (commands.*). Empty unless set; each
+      # runtime falls back to what runtime.framework implies.
+      DX_START_CMD: "${STACK_COMMANDS_START}"
+      DX_QUEUE_CMD: "${STACK_COMMANDS_QUEUE}"
+      DX_SCHEDULE_CMD: "${STACK_COMMANDS_SCHEDULE}"
+      DX_ASGI_APP: "${STACK_COMMANDS_ASGI_APP}"
+      DX_WSGI_APP: "${STACK_COMMANDS_WSGI_APP}"
+      DX_CELERY_APP: "${STACK_COMMANDS_CELERY_APP}"
+      DX_SETTINGS_MODULE: "${STACK_COMMANDS_SETTINGS_MODULE}"
+      APP_URL: "https://${INSTANCE_SLUG}.${STACK_DOMAIN}"
+
+      # Own database. Not a schema, not a prefix - a whole database, so a
+      # migration that goes wrong on one branch cannot be seen from another.
+      # Driver names, derived from the configured engines. A framework needs to be
+      # told which driver to use; it will not infer it from a host being present.
+      DB_CONNECTION: "${DB_CONNECTION}"
+      # Rebuilt for THIS instance's database, not inherited: the base stack's
+      # URL names the base stack's database, and a migration run against it from
+      # an instance is the exact accident per-instance databases exist to stop.
+      DATABASE_URL: "${INSTANCE_DATABASE_URL}"
+      DB_SERVER_VERSION: "${STACK_DATABASE_VERSION:-}"
+      CACHE_DRIVER: "${CACHE_DRIVER}"
+      CACHE_STORE: "${CACHE_DRIVER}"
+      SESSION_DRIVER: "${SESSION_DRIVER}"
+      QUEUE_CONNECTION: "${QUEUE_CONNECTION}"
+      REDIS_CLIENT: "${REDIS_CLIENT}"
+      MAIL_MAILER: "${MAIL_MAILER}"
+      FILESYSTEM_DISK: "${FILESYSTEM_DISK}"
+      DB_HOST: "${DB_ENGINE}"
+      DB_PORT: "${DB_INTERNAL_PORT}"
+      DB_DATABASE: "${INSTANCE_DB}"
+      DB_USERNAME: "${DB_USER}"
+      DB_PASSWORD: "${DB_PASSWORD}"
+
+      # Own Redis logical database. Sharing one server is fine; sharing keyspace
+      # is not - a cached tenant config or a session from another branch is the
+      # kind of bug that costs a day because nothing about it looks like caching.
+      REDIS_HOST: "redis"
+      REDIS_PORT: "${PORT_REDIS}"
+      REDIS_DB: "${INSTANCE_REDIS_DB}"
+      REDIS_PREFIX: "${INSTANCE_SLUG}:"
+      CACHE_PREFIX: "${INSTANCE_SLUG}:"
+
+      MAIL_HOST: "mailpit"
+      MAIL_PORT: "${PORT_MAIL_SMTP}"
+      S3_ENDPOINT: "http://minio:${PORT_MINIO_S3}"
+      S3_KEY: "${S3_KEY}"
+      S3_SECRET: "${S3_SECRET}"
+      # Own bucket, for the same reason as the database.
+      S3_BUCKET: "${INSTANCE_SLUG}"
+
+      XDEBUG_MODE: "${XDEBUG_MODE}"
+      # The same runtime settings the base stack gets. Without these an instance
+      # silently runs on the language's built-in defaults, so a limit raised in
+      # config applies to the main app and to nothing else - which presents as
+      # "it works on main but not on my branch".
+      PHP_MEMORY_LIMIT: "${PHP_MEMORY_LIMIT}"
+      PHP_MAX_EXECUTION: "${PHP_MAX_EXECUTION}"
+      PHP_POST_MAX: "${PHP_POST_MAX}"
+      PHP_UPLOAD_MAX: "${PHP_UPLOAD_MAX}"
+      PHP_MAX_INPUT_VARS: "${PHP_MAX_INPUT_VARS}"
+      PHP_OPCACHE_MEMORY: "${PHP_OPCACHE_MEMORY}"
+      PHP_OPCACHE_FILES: "${PHP_OPCACHE_FILES}"
+      PHP_TIMEZONE: "${PHP_TIMEZONE}"
+      DX_REQUEST_BODY_MAX: "${PHP_REQUEST_BODY}"
+    volumes:
+      - "${INSTANCE_DIR}:/app"
+      - ./data/proxy/caddy/pki/authorities/local:/dx/ca:ro
+      # The dependency cache is shared with the base stack on purpose: a fresh
+      # worktree installing 200 packages from a warm cache takes seconds instead
+      # of minutes, and that difference decides whether people use worktrees.
+      - ./data/build-cache:/dx/cache
+    healthcheck:
+      test: ["CMD", "sh", "-c",
+             "curl -fsS http://localhost:${STACK_RUNTIME_PORT}${STACK_RUNTIME_HEALTHZ} || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    # No published ports. The front proxy routes <slug>.<domain> here, which is
+    # what makes the instance count bounded by memory rather than by free ports.
+    networks:
+      # The slug on both networks, for the same reason the base stack uses
+      # `main` on both: `app` is ambiguous wherever more than one of these runs.
+      stack:
+        aliases: [ "${INSTANCE_SLUG}" ]
+      isolated:
+        # Compose gives every service the alias of its *service name*, and there
+        # is no way to suppress it. Every instance calls its service "app", so
+        # plain `app` on this shared network round-robins across the base stack
+        # and every running instance - a sandbox verifying "its" app would
+        # silently hit someone else's a third of the time.
+        #
+        # The slug alias is the unambiguous name. Address instances by it, or by
+        # the container name; never by `app`.
+        aliases: [ "${INSTANCE_SLUG}" ]
+    labels: *labels
+
+  queue:
+    image: "${APP_IMAGE}"
+    container_name: "${PROJECT}-${INSTANCE_KIND}-${INSTANCE_SLUG}-queue"
+    profiles: [ "queue" ]
+    user: "${HOST_UID}:${HOST_GID}"
+    working_dir: /app
+    init: true
+    restart: unless-stopped
+    command: [ "dx-entrypoint", "queue" ]
+    environment:
+      DX_ROLE: "queue"
+      DX_INSTANCE: "${INSTANCE_SLUG}"
+      WORKER_MAX_RUNTIME: "${WORKER_MAX_RUNTIME}"
+      QUEUE_TRIES: "${QUEUE_TRIES}"
+      QUEUE_TIMEOUT: "${QUEUE_TIMEOUT}"
+      DX_FRAMEWORK: "${STACK_RUNTIME_FRAMEWORK}"
+      DB_HOST: "${DB_ENGINE}"
+      DB_PORT: "${DB_INTERNAL_PORT}"
+      DB_DATABASE: "${INSTANCE_DB}"
+      DB_USERNAME: "${DB_USER}"
+      DB_PASSWORD: "${DB_PASSWORD}"
+      REDIS_HOST: "redis"
+      REDIS_DB: "${INSTANCE_REDIS_DB}"
+      MAIL_HOST: "mailpit"
+      MAIL_PORT: "${PORT_MAIL_SMTP}"
+    volumes:
+      - "${INSTANCE_DIR}:/app"
+      - ./data/build-cache:/dx/cache
+    depends_on:
+      app: { condition: service_started }
+    networks: [ stack ]
+    labels: *labels
+
+  # ── the agent sandbox ─────────────────────────────────────────────────────
+  # The container a coding agent runs *inside*. Profile "sandbox", so `dx wt`
+  # never starts one and `dx agent` always does.
+  #
+  # The isolation story, in order of how much it actually buys:
+  #
+  #   1. `isolated` network only. No route off the box except through the egress
+  #      proxy, which enforces an allowlist. This is a kernel-level property of
+  #      an internal network, not a rule anything has to remember to apply.
+  #   2. The worktree is the only writable path into the repo. The main checkout
+  #      is not mounted at all - an agent cannot edit the branch you are on.
+  #   3. Resource caps. Not security, but the difference between "a run went
+  #      wrong" and "the host fell over".
+  #   4. no-new-privileges + capability drop + pids_limit. Defence in depth
+  #      against a compromised dependency, not against the agent itself.
+  #
+  # What it explicitly does NOT protect against: the agent is a normal user in
+  # its own worktree and can commit, push (if given credentials) and run
+  # anything. The controls that matter there are in policy/policy.yml, and they
+  # are enforced by the Claude Code hooks, not by Docker.
+  sandbox:
+    build:
+      context: ./agent/sandbox
+      args:
+        RUNTIME_IMAGE: "${APP_IMAGE}"
+    image: "${SANDBOX_IMAGE}"
+    container_name: "${PROJECT}-agent-${INSTANCE_SLUG}-sandbox"
+    profiles: [ "sandbox" ]
+    user: "${HOST_UID}:${HOST_GID}"
+    working_dir: /app
+    init: true
+    restart: "no"
+    command: [ "sleep", "infinity" ]
+    environment:
+      DX_INSTANCE: "${INSTANCE_SLUG}"
+      DX_AGENT: "${AGENT_OWNER:-unknown}"
+      DX_STACK: "${STACK_NAME}"
+      DX_DOMAIN: "${STACK_DOMAIN}"
+      # The instance's own container name - unique, and therefore unambiguous.
+      # NOT "http://app", which resolves round-robin across every instance on
+      # this network (see the aliases comment above).
+      DX_APP_URL: "http://${PROJECT}-${INSTANCE_KIND}-${INSTANCE_SLUG}-app:${STACK_RUNTIME_PORT}"
+      DX_APP_HOST: "${INSTANCE_SLUG}"
+      DX_INSTANCE_DB: "${INSTANCE_DB}"
+      # Proxy variables are how the allowlist is actually applied: with no route
+      # of its own, anything not proxy-aware simply fails, and anything that is
+      # goes through the filter. curl, git-over-https, composer, npm, pip and
+      # the Claude Code CLI all honour these.
+      HTTP_PROXY: "${AGENT_PROXY:-}"
+      HTTPS_PROXY: "${AGENT_PROXY:-}"
+      http_proxy: "${AGENT_PROXY:-}"
+      https_proxy: "${AGENT_PROXY:-}"
+      NO_PROXY: "${INSTANCE_SLUG},${PROJECT}-${INSTANCE_KIND}-${INSTANCE_SLUG}-app,redis,mailpit,minio,${DB_ENGINE},localhost,127.0.0.1,.${STACK_DOMAIN}"
+      no_proxy: "${INSTANCE_SLUG},${PROJECT}-${INSTANCE_KIND}-${INSTANCE_SLUG}-app,redis,mailpit,minio,${DB_ENGINE},localhost,127.0.0.1,.${STACK_DOMAIN}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+    volumes:
+      - "${INSTANCE_DIR}:/app"
+      # Read-only. The sandbox may run dx to inspect and verify, but the
+      # toolkit's own files - including the policy that constrains it - are not
+      # its to change.
+      - .:/dx:ro
+      # …with one writable window, mounted over the read-only one: the audit
+      # trail. An agent's dx calls have to be recorded in the same place the
+      # human's are, or "what did it actually do" has two answers.
+      - ./data/state:/dx/data/state
+      - ./data/build-cache:/dx-cache
+      - ./data/agent/${INSTANCE_SLUG}:/home/agent
+      # NOT /dx/ca. Docker has to create a bind mount's mountpoint, and /dx is
+      # mounted read-only - so a nested mount at a path that does not already
+      # exist in the source tree fails the container with an OCI error that says
+      # "read-only file system" and names a path nobody recognises.
+      # (./data/state mounts fine at /dx/data/state precisely because that
+      # directory does exist.)
+      - ./data/proxy/caddy/pki/authorities/local:/dx-ca:ro
+    cap_drop: [ ALL ]
+    cap_add: [ CHOWN, SETUID, SETGID, DAC_OVERRIDE ]
+    security_opt: [ "no-new-privileges:true" ]
+    pids_limit: ${STACK_AGENTS_PIDS_LIMIT}
+    cpus: ${STACK_AGENTS_CPUS}
+    mem_limit: ${STACK_AGENTS_MEMORY}
+    # No swap beyond the memory limit. Swapping turns a memory-hungry run into a
+    # twenty-minute one instead of failing in thirty seconds, and the twenty
+    # minutes are spent making every other container on the box slow.
+    memswap_limit: ${STACK_AGENTS_MEMORY}
+    networks: [ isolated ]
+    labels: *labels
+
+networks:
+  # Both provided by the base stack. `external: true` means an instance can
+  # never accidentally create its own copy - if the base stack is down, starting
+  # an instance fails loudly instead of coming up on an island with no database.
+  stack:
+    external: true
+    name: "${STACK_NAME}-dev"
+  isolated:
+    external: true
+    name: "${STACK_NAME}-dev-isolated"

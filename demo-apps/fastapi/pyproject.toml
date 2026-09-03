@@ -1,0 +1,36 @@
+[build-system]
+# uv resolves the project itself as well as its dependencies, so it needs to
+# know how to build it. A service is not a library, but declaring a backend is
+# cheaper than special-casing the install.
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dx-demo-fastapi"
+version = "1.0.0"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "alembic>=1.14",
+    "sqlalchemy>=2.0",
+    # SQLAlchemy defaults a bare postgresql:// URL to psycopg2, which is not
+    # installed here; env.py asks for psycopg (v3) explicitly.
+    "psycopg[binary]>=3.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+# No database name here. dx sets DB_DATABASE to a disposable one in the
+# environment before invoking the runner, and refuses to run if the name it
+# computed does not look disposable - a suite that names its own database is a
+# suite that eventually truncates the wrong one.
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]

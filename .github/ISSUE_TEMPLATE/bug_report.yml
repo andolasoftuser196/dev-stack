@@ -1,0 +1,82 @@
+name: Bug report
+description: Something in dx does not behave the way it says it does
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        `dx doctor` and `dx describe` are read-only and print no secrets. Their
+        output usually identifies the problem faster than a description does.
+
+        Security issues go through [SECURITY.md](../blob/main/SECURITY.md)
+        instead - please do not open a public issue for one.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: The command you ran and what it did.
+      placeholder: |
+        $ ./dx up
+        ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: ./dx doctor
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: describe
+    attributes:
+      label: ./dx describe
+      render: text
+    validations:
+      required: true
+
+  - type: input
+    id: runtime
+    attributes:
+      label: Runtime
+      description: Kind and version - the `runtime` block in config/stack.yml.
+      placeholder: frankenphp 8.3
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Host
+      options:
+        - Linux
+        - macOS (Apple silicon)
+        - macOS (Intel)
+        - Windows / WSL2
+    validations:
+      required: true
+
+  - type: input
+    id: docker
+    attributes:
+      label: docker version and docker compose version
+      placeholder: "Docker 27.3.1, Compose v2.29.7"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: "`./dx logs` if a container is involved. Trim to the part that matters."
+      render: text

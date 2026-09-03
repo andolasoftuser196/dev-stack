@@ -1,0 +1,317 @@
+# config/defaults.yml - toolkit defaults, seeded into the `default` scope.
+#
+# Every value dx uses that is not project-specific. Nothing in lib/, dx or the
+# compose files may hardcode any of these: if a number or an image tag appears
+# in code, it belongs here instead.
+#
+# Resolution order is  host:<name>  >  stack  >  default.  A project overrides
+# anything here in config/stack.yml; a machine overrides anything in
+# config/hosts.yml. This file is the toolkit's opinion, not anyone's constraint.
+#
+# Editing this file re-imports it automatically on the next dx command (the
+# import is keyed on mtime). To change one value without editing a file:
+#     dx config set images.proxy caddy:2.8-alpine
+
+# ── container images ────────────────────────────────────────────────────────
+# Pinned to a major where the upstream is disciplined about tags, and to an
+# exact version where it is not. `latest` appears only for images whose whole
+# purpose is to track upstream and whose breakage is cosmetic.
+#
+# Bump one with:  dx config set images.<name> <tag>
+images:
+  proxy: caddy:2-alpine
+  mysql: mysql
+  postgres: postgres
+  redis: redis:7-alpine
+  mailpit: axllent/mailpit:latest
+  minio: minio/minio:latest
+  meilisearch: getmeili/meilisearch:v1.9
+  pgvector: pgvector/pgvector:pg16
+  db_ui: adminer:latest
+  cache_ui: rediscommander/redis-commander:latest
+  # Pinned exactly: a Playwright image and the Playwright package in the repo
+  # must agree, and `latest` silently breaks that the moment upstream releases.
+  browser: mcr.microsoft.com/playwright:v1.49.0-noble
+  mcp: python:3.12-slim
+  # Used by fix-perms and nuke to touch root-owned files. Tiny and boring on
+  # purpose - it runs as root with the repo mounted.
+  helper: alpine:3
+  egress_base: alpine:3.20
+
+# Developer tools the Go runtime image installs.
+#
+# Pinned, never `@latest`. `go install x@latest` is the same mistake as `:latest`
+# on an image tag, with a sharper edge: the tool resolves to a release requiring
+# a NEWER Go than the image has, and the build fails with "requires go >= 1.26
+# (running go 1.23)" - on a machine where nothing changed. Bump these
+# deliberately, alongside runtime.version.
+go_tools:
+  air: v1.61.7
+  delve: v1.23.1
+  staticcheck: "2024.1.1"
+
+# Base images for the runtime modules. `{version}` is substituted with
+# runtime.version, so a project changing PHP 8.3 -> 8.4 changes one field.
+runtime_images:
+  frankenphp: "dunglas/frankenphp:1-php{version}"
+  node: "node:{version}-bookworm-slim"
+  python: "python:{version}-bookworm"
+  go: "golang:{version}-bookworm"
+
+# ── ports ───────────────────────────────────────────────────────────────────
+# Ports *inside* the container network. These are properties of the upstream
+# images, not preferences - change one only if you have changed the image.
+ports:
+  mysql: 3306
+  postgres: 5432
+  redis: 6379
+  mail_smtp: 1025
+  mail_ui: 8025
+  minio_s3: 9000
+  minio_console: 9001
+  db_ui: 8080
+  cache_ui: 8081
+  browser_vnc: 5900
+  browser_novnc: 7900
+  mcp: 8080
+  egress: 8888
+  caddy_admin: 2019
+
+# Command overrides, all empty by default: each runtime derives its own from
+# runtime.framework, and these exist for the cases where that derivation is
+# wrong - a non-standard entrypoint, an app factory somewhere unusual, a
+# messenger transport that is not called "async".
+#
+# Referenced by every runtime's entrypoint. They were documented in the examples
+# before anything passed them through, so setting one silently did nothing.
+commands:
+  start: ""
+  queue: ""
+  schedule: ""
+  # python: the import path uvicorn / flask are pointed at
+  asgi_app: ""
+  wsgi_app: ""
+  celery_app: ""
+  settings_module: ""
+
+# Inner port the application process listens on, per runtime, behind that
+# runtime's own Caddy. Meaningless for frankenphp, where Caddy is the runtime.
+app_ports:
+  frankenphp: 0
+  node: 3000
+  python: 8000
+  go: 8080
+
+# Host-published ports are derived, not assigned, so several dx stacks coexist
+# without anyone hand-allocating. A hash of name@domain gives a stable offset in
+# [span_min, span_min+span), added to each base below.
+#
+# The proxy is deliberately absent: a dev domain is only useful without a port
+# suffix in the URL, so 80/443 are fixed and a collision is a real conflict that
+# preflight reports by name.
+port_offset:
+  span: 900
+  span_min: 100
+  base_db: 20000
+  base_cache: 21000
+  base_storage: 22000
+  base_vnc: 23000
+  base_mcp: 24000
+
+# ── driver names the application reads ──────────────────────────────────────
+# dx already injects DB_HOST, DB_DATABASE and friends. Frameworks additionally
+# need to be told *which driver* to use, and they will not infer it: Laravel 11
+# defaults DB_CONNECTION to sqlite, so a stack with a perfectly healthy MySQL
+# reports "database file does not exist" and nothing points at the cause.
+#
+# {engine} is substituted with the configured engine. The values live here so a
+# project whose framework spells them differently can change them without
+# touching a compose file.
+app_env:
+  # mysql -> mysql, postgres -> pgsql. Laravel, CakePHP and Doctrine all accept
+  # these; the mapping is applied in lib/core.sh.
+  db_connection_mysql: mysql
+  db_connection_postgres: pgsql
+  # Laravel renamed CACHE_DRIVER to CACHE_STORE in 11; both are injected because
+  # which one an application reads depends on its version, and setting the one
+  # it ignores costs nothing.
+  cache_driver: redis
+  session_driver: redis
+  queue_connection: redis
+  # phpredis is compiled into the frankenphp image; predis is not installed.
+  redis_client: phpredis
+  mail_mailer: smtp
+  filesystem_disk: s3
+  # The scheme half of DATABASE_URL, which Doctrine, Prisma, SQLAlchemy, Diesel,
+  # Ecto and node-postgres all read. dx assembles the rest from the connection
+  # details it already injects.
+  #
+  # Deliberately the plain schemes rather than a driver-qualified one
+  # (postgresql+psycopg, pdo-pgsql): those are library-specific, and a project
+  # that needs one builds its own URL from the parts. A generic value that works
+  # everywhere beats a specific one that works in one place and breaks silently
+  # in the next.
+  database_url_scheme_mysql: mysql
+  database_url_scheme_postgres: postgresql
+
+  # Used when the corresponding service is `none`.
+  fallback_cache: file
+  fallback_queue: sync
+  fallback_filesystem: local
+
+# ── service tuning ──────────────────────────────────────────────────────────
+tuning:
+  # A dev box runs several stacks, and each worktree instance adds a database.
+  # The stock 128M buffer pool plus a dozen instance databases is what pushes a
+  # 16GB machine into swap.
+  mysql_buffer_pool: 256M
+  mysql_max_connections: 200
+  mysql_charset: utf8mb4
+  mysql_collation: utf8mb4_unicode_ci
+  # Shared across all sixteen logical databases, not per instance.
+  redis_maxmemory: 256mb
+  redis_maxmemory_policy: allkeys-lru
+  mail_max_messages: 5000
+  # Chromium's renderer uses shared memory heavily; the 64MB default /dev/shm
+  # makes it crash on any page with real content.
+  browser_shm: 1gb
+  browser_screen: 1600x1000x24
+  worker_max_runtime: 1800
+  queue_tries: 3
+  queue_timeout: 120
+
+# ── PHP (frankenphp runtime) ────────────────────────────────────────────────
+# Interpolated into php.dev.ini through the environment, so changing one is a
+# config change rather than an image rebuild.
+php:
+  memory_limit: 1G
+  max_execution_time: 300
+  post_max_size: 64M
+  upload_max_filesize: 64M
+  max_input_vars: 5000
+  opcache_memory: 256
+  opcache_max_files: 20000
+  timezone: UTC
+  # Used by `dx phpstan`; the tool's own default lets analysis grow far enough
+  # to push a small box into swap and take the database down with it.
+  phpstan_memory: 1G
+  request_body_max: 64MiB
+
+# ── presets ─────────────────────────────────────────────────────────────────
+# `dx up <preset>` -> this profile set, on top of whatever the service selection
+# already implies. Add a preset by adding a key; dx reads them, it does not know
+# them, so a new preset needs no code change.
+default_preset: default
+
+presets:
+  core: ""
+  default: "queue scheduler"
+  tools: "queue scheduler tools"
+  full: "queue scheduler tools browser mcp"
+
+# Every profile that exists in any compose file. down / nuke / recreate enable
+# all of them - a profile missing from this list becomes a container `dx down`
+# silently leaves running.
+profiles:
+  all: "mysql postgres redis mailpit minio meilisearch pgvector queue scheduler tools browser mcp egress agent sandbox"
+
+# ── instances ───────────────────────────────────────────────────────────────
+instances:
+  # Redis logical databases available to instances. 0 belongs to the base stack.
+  # This range, not memory or ports, is the real concurrency ceiling.
+  redis_db_min: 1
+  redis_db_max: 15
+  # Slugs become hostnames, database names and container names, so these would
+  # shadow a stack route and silently take its traffic.
+  reserved: "app www mail db cache s3 minio vnc mcp agent proxy admin api static main egress"
+  # Seed a new instance from the newest snapshot rather than migrating from
+  # empty. Twenty seconds versus minutes is what decides whether people use
+  # instances at all.
+  seed_from_snapshot: true
+
+# ── database safety ─────────────────────────────────────────────────────────
+# The patterns dx will drop, and the ones it will point a test suite at. These
+# were duplicated across five files; they are one setting now.
+#
+# {db} expands to the stack's development database name.
+database_safety:
+  # A database matching one of these may be dropped (after an automatic
+  # snapshot). Everything else is refused outright.
+  disposable: "*_test *_sandbox {db}_* wt_* agentrun_*"
+  # A test suite may only be pointed at a database matching one of these.
+  test_pattern: "*_test *_sandbox"
+  # Suffix appended to the development database to name the test database.
+  test_suffix: _test
+  # Snapshot before every destructive operation, and abort if it fails. Turning
+  # this off removes the only thing standing between a typo and a lost database.
+  snapshot_before_destroy: true
+
+# ── timeouts (seconds) ──────────────────────────────────────────────────────
+# Tuned per class of operation. A single global timeout either kills a
+# legitimate dependency install or lets a wedged test run eat the whole budget.
+timeouts:
+  db_start: 180
+  db_start_postgres: 120
+  cache_start: 60
+  app_start: 120
+  ca_generate: 30
+  deps_install: 1800
+  migrate: 1200
+  tests: 4500
+  proxy_reload: 30
+  # MCP tool call defaults; per-tool overrides live in mcp.timeouts below.
+  mcp_default: 900
+
+mcp:
+  # A tool result larger than this is truncated in the middle, with a note
+  # saying so. Silent truncation teaches the model it has read the whole log.
+  max_output: 60000
+  timeout_describe: 30
+  timeout_status: 60
+  timeout_preflight: 120
+  timeout_doctor: 120
+  timeout_verify: 180
+  timeout_logs: 120
+  timeout_query: 120
+  timeout_snapshot: 600
+  timeout_up: 2400
+  timeout_test: 3600
+  timeout_instance: 1800
+
+# ── preflight thresholds ────────────────────────────────────────────────────
+preflight:
+  # Megabytes free on the stack's filesystem. An image build plus a database
+  # import is a couple of gigabytes, and running out mid-build leaves a
+  # half-built image and a confusing error.
+  min_disk_mb: 5000
+  # Gigabytes the base stack itself wants, added to the agent-sandbox budget
+  # when checking whether max_concurrent is realistic.
+  base_memory_gb: 4
+
+# Xdebug mode: off | debug | develop | debug,develop | profile | coverage.
+# `dx debug on|off` flips this in the database rather than editing a file.
+xdebug:
+  mode: off
+
+# Object storage credentials. Not secrets - this is a local MinIO with no data
+# anyone cares about. A real key belongs in .env, which overrides these.
+storage:
+  key: minioadmin
+  secret: minioadmin
+
+# ── output ──────────────────────────────────────────────────────────────────
+output:
+  log_tail: 200
+  # Regex `dx verify` and `dx errors` use to find real errors across every log
+  # format the runtimes emit - JSON level fields, PHP fatals, Python tracebacks,
+  # Go panics.
+  error_pattern: '"level":"(error|critical|emergency)"|\b(fatal error|uncaught|exception|traceback|panic:)\b'
+
+# ── agent egress ────────────────────────────────────────────────────────────
+egress:
+  # Methods the allowlist proxy will tunnel. CONNECT on 443 is the only one that
+  # really matters - everything an agent fetches is TLS - but without 80 a plain
+  # HTTP redirect to an allowed host dies confusingly.
+  connect_ports: "443 80"
+  max_clients: 100
+  timeout: 600

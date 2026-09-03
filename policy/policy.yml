@@ -1,0 +1,58 @@
+# policy/policy.yml - what an agent may do, and what needs a human first.
+#
+# Two independent kinds of control, and it matters that they are separate:
+#
+#   Prevention  - the Claude Code hooks in .claude-plugin/hooks/ read
+#                 denied-commands.tsv and refuse the tool call outright. These
+#                 are for actions with no safe version: dropping the dev
+#                 database, running a suite that truncates it, bypassing dx.
+#
+#   Review gate - 'dx agent diff' reads denied-paths.tsv and the caps below and
+#                 returns a verdict. A violation NEVER stops the work. It stops
+#                 the work from landing unattended.
+#
+# The second one is the one people get wrong. A gate that refuses to produce the
+# change throws away correct fixes for touching a migration; a gate that only
+# says "a human must look at this" costs nothing and is therefore still switched
+# on a year later.
+
+# ── review gate: size caps ──────────────────────────────────────────────────
+# Not a quality judgement. A proxy for "a human can review this in one sitting."
+# Anything larger is still a perfectly valid change; it just needs eyes.
+caps:
+  max_files: 5
+  max_lines: 200
+
+# ── review gate: verification ───────────────────────────────────────────────
+gate:
+  # Withhold the unattended verdict when the agent narrowed what it ran. The
+  # smallest changes are exactly the ones an agent scopes verification down for,
+  # and without this they would be the ones landing on the least evidence.
+  require_full_verify: true
+  # Withhold it when 'dx verify' has not passed since the last edit.
+  require_verify_pass: true
+  # Even with everything green, default to "needs a human". Turning this on is a
+  # deliberate act by someone who has read the audit log for a while.
+  allow_unattended: false
+
+# ── prevention: what the hooks refuse ───────────────────────────────────────
+enforce:
+  # Refuse raw `docker compose` - it starts a subtly different stack (no
+  # HOST_UID, no profile set, no post-start work) and the difference surfaces
+  # hours later as a permissions error.
+  require_dx_wrapper: true
+  # Refuse a framework test runner invoked directly. dx test points the suite at
+  # a disposable database; the bare runner points it at whatever the config says,
+  # and RefreshDatabase then drops every table in it.
+  require_dx_test: true
+  # Refuse lockfile-rewriting package commands. The diff needs a human.
+  protect_lockfiles: true
+  # Refuse writes outside the agent's own worktree.
+  confine_to_worktree: true
+
+# ── audit ───────────────────────────────────────────────────────────────────
+audit:
+  # Record every tool call an agent makes, allowed or denied. The point is to be
+  # able to answer "what did it actually do" without relying on its own account.
+  log_all_tool_calls: true
+  path: data/state/agent-tools.jsonl

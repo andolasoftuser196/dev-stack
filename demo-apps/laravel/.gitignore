@@ -1,0 +1,14 @@
+vendor/
+node_modules/
+# .env is committed in this demo, unlike in a real Laravel project: it carries
+# a throwaway APP_KEY so a fresh clone boots. A bare `.env` line here silently
+# beats the root .gitignore's `!demo-apps/*/.env`, because a nested rule wins
+# for files beneath it - and the symptom is a 500 on every request, in this one
+# demo only, on a machine where the file is present and looks committed.
+.env.local
+storage/framework/cache/data/*
+!storage/framework/cache/data/.gitkeep
+storage/logs/*
+!storage/logs/.gitkeep
+bootstrap/cache/*
+!bootstrap/cache/.gitkeep

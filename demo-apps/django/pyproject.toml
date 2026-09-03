@@ -1,0 +1,26 @@
+[build-system]
+# uv resolves the project itself as well as its dependencies, so it needs to
+# know how to build it. A service is not a library, but declaring a backend is
+# cheaper than special-casing the install.
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dx-demo-django"
+version = "1.0.0"
+requires-python = ">=3.11"
+dependencies = ["django>=5.0", "psycopg[binary]>=3.2", "celery>=5.4", "redis>=5.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-django>=4.9"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+testpaths = ["tests"]
+# Note what is absent: any database name. dx points the suite at <db>_test in
+# the environment. Django's own runner would add its own test_ prefix on top of
+# that, which is why pytest-django is used instead - one disposable name, and
+# one that dx can check.
+
+[tool.hatch.build.targets.wheel]
+packages = ["demo"]

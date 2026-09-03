@@ -1,0 +1,2 @@
+# Nothing. That is the point of this one: the stack works with a project that
+# has no dependencies at all.

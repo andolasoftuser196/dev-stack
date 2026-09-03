@@ -1,0 +1,20 @@
+# The project's own air config wins over the runtime's default - a project that
+# has tuned its watch rules knows its layout better than a generic default.
+root = "."
+tmp_dir = "/dx/cache/air"
+
+[build]
+  cmd = "go build -o /dx/cache/air/main ."
+  bin = "/dx/cache/air/main"
+  include_ext = ["go"]
+  exclude_dir = ["tmp", "vendor", "testdata"]
+  exclude_regex = ["_test\\.go$"]
+  # Editors write in bursts (save, then format-on-save). Without a delay air
+  # starts three builds for one save and discards the first two.
+  delay = 500
+  stop_on_error = false
+  send_interrupt = true
+  kill_delay = 2000
+
+[log]
+  time = true

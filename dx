@@ -1,0 +1,492 @@
+#!/usr/bin/env bash
+# dx - the one entry point to this development environment.
+#
+# Everything goes through here rather than raw `docker compose`, because compose
+# alone does not know the host UID/GID, the profile set implied by stack.yml, the
+# derived port offset, or any of the post-start work. A raw `docker compose up`
+# starts a subtly different stack, and the difference surfaces hours later as a
+# permissions error on a file the app wrote.
+#
+# Layout:
+#   lib/sqlite.sh     the only thing that talks to the config store
+#   lib/config.sh     configuration: layers, resolution, `dx config`
+#   lib/core.sh       bootstrap, compose plumbing, output, audit
+#   lib/db.sh         the APPLICATION database (not the config store)
+#   lib/instance.sh   the worktree/agent instance machinery
+#   lib/worktree.sh   dx wt
+#   lib/agent.sh      dx agent
+#   lib/policy.sh     dx agent diff, and the hooks' command guard
+#   lib/doctor.sh     dx preflight / doctor / verify / status
+#   runtimes/<kind>/  everything language-specific (see runtimes/_contract.md)
+
+set -euo pipefail
+
+DX_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+export DX_ROOT
+
+# Order matters: core defines log/die, sqlite needs them, config needs sqlite.
+for m in core sqlite config; do
+    # shellcheck disable=SC1090
+    . "$DX_ROOT/lib/$m.sh"
+done
+
+require_host_os
+
+# `dx init` has to run before there is a stack.yml to load, so it is handled
+# before load_config and is the only command that may.
+if [ "${1:-}" = "init" ]; then
+    shift
+    exec "$DX_ROOT/scaffold/init.sh" "$@"
+fi
+
+load_config
+load_runtime
+for m in db instance worktree agent policy doctor; do
+    # shellcheck disable=SC1090
+    . "$DX_ROOT/lib/$m.sh"
+done
+
+usage() {
+    cat <<EOF
+dx - $(rt_display_name) at https://${STACK_ROUTES_APP}.${STACK_DOMAIN}/
+
+  Lifecycle
+    dx up [$(preset_names | tr '\n' '|' | sed 's/|$//')]   start the stack (default: $(_cfgd DEFAULT_PRESET default))
+    dx down                          stop everything, keep the data
+    dx nuke                          stop everything and delete the data  (destructive)
+    dx restart | dx recreate <svc>
+    dx build [--no-cache]            rebuild the runtime image
+
+  Look at it
+    dx status | dx urls | dx describe
+    dx logs [service] [-f]
+    dx preflight                     will 'dx up' work on this machine?
+    dx doctor                        does reality match what dx thinks?
+    dx verify [instance]             is the app actually working right now?
+
+  Work in it
+    dx sh [service]                  shell in the app container, as you
+    dx exec <service> <cmd...>
+    dx run <cmd...>                  run in the app container
+    dx deps                          install dependencies (frozen lockfile)
+    dx test [args...]                the suite, pointed at a disposable database
+    dx lint [args...]  |  dx repl
+    dx $(rt_verbs | tr ' ' '\n' | head -4 | tr '\n' ' ')...
+
+  Data
+    dx db                            interactive database shell
+    dx db:query <sql>                one statement, batch output
+    dx db:migrate                    apply the project's migrations
+    dx db:snapshot [name]            snapshot to data/snapshots/
+    dx db:snapshots                  list them
+    dx db:restore <file> [db]        restore (snapshots first, always)
+    dx db:import <file>              load a dump from elsewhere
+    dx db:drop <name>                drop a disposable database
+
+  Several branches at once
+    dx wt add <branch>               a full environment at <slug>.${STACK_DOMAIN}
+    dx wt ls | up | stop | rm | logs | sh | exec | verify
+
+  Agents
+    dx agent spawn <branch>          an isolated sandbox for a coding agent
+    dx agent ls | attach | run | verify | diff | rm | reap
+    dx agent policy | audit
+
+  Odds and ends
+    dx browse <url>                  open it in the watchable browser
+    dx ca-cert                       trust the stack CA on your workstation
+    dx debug on|off|status           Xdebug
+    dx fix-perms                     repair root-owned files from an older stack
+    dx mcp:install                   register the stack MCP server with Claude Code
+    dx completion bash|zsh
+    dx selftest [--integration]      run the toolkit's own test suite
+
+  Configuration
+    dx config list [prefix]          every effective value and its layer
+    dx config get|set|unset <key>    read and change it, now
+    dx config explain <key>          why this value is what it is
+    dx config history [key]          what changed, when, by whom
+    dx config import | export
+
+  Configuration lives in a SQLite database, seeded from config/*.yml.
+  .env holds bootstrap only: DX_DB, DX_HOST, and secrets.
+EOF
+}
+
+# ── the up path ─────────────────────────────────────────────────────────────
+cmd_up() {
+    local preset="${1:-$(_cfgd DEFAULT_PRESET default)}"
+    local base; base="$(profiles_for_preset "$preset")" \
+        || die "unknown preset '$preset'. Valid: $(preset_names | tr '\n' ' ')
+      Add one:  dx config set presets.<name> \"<profiles>\" default"
+
+    ensure_dirs
+
+    # Preflight is advisory on `up`: a warning must not stop someone starting
+    # their stack, but a failure almost always means `up` is about to waste two
+    # minutes and then fail confusingly.
+    if ! cmd_preflight; then
+        echo
+        confirm "Preflight found failures. Start anyway?" || exit 1
+    fi
+    echo
+
+    local profiles; profiles="$(profiles_for_services) $base"
+    [ "${STACK_TOOLS_MCP}" = "true" ] && case "$preset" in full) profiles="$profiles mcp" ;; esac
+    [ "${STACK_TOOLS_BROWSER}" = "true" ] && case "$preset" in full) profiles="$profiles browser" ;; esac
+
+    log "preset '$preset' -> profiles: ${profiles// / }"
+    local pargs=(); mapfile -t pargs < <(profile_args $profiles)
+
+    # First run has no image and no CA. Say so, because a five-minute silent
+    # build is indistinguishable from a hang.
+    if ! docker image inspect "$APP_IMAGE" >/dev/null 2>&1; then
+        log "building $APP_IMAGE - first build takes a few minutes"
+    fi
+
+    compose "${pargs[@]}" up -d --build --remove-orphans
+    audit "stack.up" "preset=$preset"
+
+    # The proxy generates its CA on first boot. Everything that trusts it - the
+    # app containers, the browser, `dx ca-cert` - needs it to exist, so wait
+    # rather than letting the next twelve things fail one at a time.
+    local i=0 ca_wait; ca_wait="$(_cfg TIMEOUTS_CA_GENERATE)"
+    while [ ! -f data/proxy/caddy/pki/authorities/local/root.crt ] && [ "$i" -lt "$ca_wait" ]; do
+        sleep 1; i=$((i+1))
+    done
+    [ -f data/proxy/caddy/pki/authorities/local/root.crt ] \
+        && ok "local CA at data/proxy/caddy/pki/authorities/local/root.crt" \
+        || warn "the proxy has not produced a CA yet - 'dx logs proxy' if TLS misbehaves"
+
+    # Wait for the backing services BEFORE the app, and before any hook.
+    #
+    # The app goes healthy in seconds - its healthz is answered by the web server
+    # on purpose - while a first-boot MySQL spends a minute building its data
+    # directory. Running `postStart` (usually a migration) in that window fails,
+    # and because hook failures are fatal, `dx up` then reports a broken stack
+    # that is actually just a slow one.
+    wait_healthy "$DB_ENGINE"    "$( [ "$DB_ENGINE" = postgres ] \
+                                     && _cfg TIMEOUTS_DB_START_POSTGRES || _cfg TIMEOUTS_DB_START )"
+    wait_healthy "$CACHE_ENGINE" "$(_cfg TIMEOUTS_CACHE_START)"
+    wait_healthy app             "$(_cfg TIMEOUTS_APP_START)"
+
+    # Dependencies, through the runtime module - not through a hook.
+    #
+    # Every example used to carry `composer install` or `npm ci` in postCreate,
+    # which duplicated what runtimes/<kind>/commands.sh already knows and got the
+    # details wrong: the frozen form fails outright when a project has no
+    # lockfile yet, with the package manager's own unhelpful error. The module
+    # handles that case; a hardcoded hook cannot.
+    #
+    # `dx wt` has always done it this way. Doing it differently for the base
+    # stack was the actual bug.
+    if ! rt_deps_present; then
+        log "installing dependencies"
+        rt_deps_install || die "dependency install failed - the app will not boot.
+      Fix it, then: dx up      (or run it yourself: dx deps)"
+    fi
+
+    # postCreate runs once per created container; postStart runs every time. The
+    # marker lives in data/state rather than in the container so that a container
+    # rebuilt for an unrelated reason does not re-run a ten-minute install.
+    local marker="data/state/postcreate.$(docker inspect -f '{{.Id}}' "$(container app)" 2>/dev/null | cut -c1-12)"
+    if [ ! -f "$marker" ]; then
+        run_hooks "postCreate" "$STACK_HOOKS_POSTCREATE"
+        touch "$marker"
+    fi
+    run_hooks "postStart" "$STACK_HOOKS_POSTSTART"
+
+    echo
+    db_warn_if_empty
+    echo
+    cmd_urls
+}
+
+# Block until a service reports healthy, or say plainly that it did not.
+#
+# "none" is a pass, not a failure: a service without a healthcheck (the proxy,
+# Mailpit on some tags) has nothing to report and waiting on it would hang
+# forever. A timeout is a warning rather than an error because the next thing dx
+# does will fail with a far more specific message than "timed out".
+wait_healthy() {
+    local svc="$1" limit="${2:-120}" i=0 h
+    [ -z "$svc" ] || [ "$svc" = none ] && return 0
+    container_running "$svc" || return 0
+
+    h="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
+         "$(container "$svc")" 2>/dev/null || echo none)"
+    [ "$h" = none ] && return 0
+
+    printf '%s[dx]%s waiting for %s ' "$C_BLU" "$C_OFF" "$svc"
+    while [ "$i" -lt "$limit" ]; do
+        h="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
+             "$(container "$svc")" 2>/dev/null || echo missing)"
+        case "$h" in
+            healthy|none) printf ' %shealthy%s\n' "$C_GRN" "$C_OFF"; return 0 ;;
+            missing)      printf ' %sgone%s\n' "$C_RED" "$C_OFF"
+                          die "$svc disappeared while starting - dx logs $svc" ;;
+        esac
+        printf '.'; sleep 2; i=$((i+2))
+    done
+    printf ' %stimed out after %ss%s\n' "$C_YLW" "$limit" "$C_OFF"
+    warn "$svc is not healthy yet. Continuing, but the next step may fail."
+    hint "dx logs $svc --tail 50"
+    return 0
+}
+
+run_hooks() {
+    local phase="$1" hooks="$2" h
+    [ -z "$hooks" ] && return 0
+
+    # Read into an array first. rt_exec runs `docker exec`, which reads stdin —
+    # and stdin here is the here-string holding the remaining hooks. Without
+    # this, the first hook silently swallows the rest and they never run.
+    local list=(); mapfile -t list <<< "$hooks"
+
+    for h in "${list[@]}"; do
+        [ -z "$h" ] && continue
+        log "$phase: $h"
+        # rt_exec, not dexec: a hook runs a PROJECT command and needs the
+        # environment the runtime set up. `docker exec sh -c` skips the
+        # entrypoint, so the python venv is not active and a migration fails
+        # with ModuleNotFoundError immediately after a successful install.
+        if ! rt_exec app "$h"; then
+            # postCreate and postStart failures are fatal; a stack that came up
+            # with its migrations half-applied is worse than one that did not
+            # come up, because the second kind is obvious.
+            die "$phase hook failed: $h
+      Fix it, then: dx up   (or edit hooks.$phase in stack.yml)"
+        fi
+    done
+}
+
+cmd_down() {
+    run_hooks "preDown" "${STACK_HOOKS_PREDOWN:-}" || true
+    log "stopping instances"
+    if [ "$(instances_count)" != "0" ]; then
+        # Fetched into an array first: `docker compose ... stop` reads stdin,
+        # which would otherwise be this result set, so only the first instance
+        # would ever be stopped.
+        local rows=(); mapfile -t rows < <(printf 'SELECT slug, kind FROM instances;' | sq)
+        local row slug kind
+        for row in "${rows[@]}"; do
+            [ -z "$row" ] && continue
+            IFS="$DX_FS" read -r slug kind <<< "$row"
+            docker compose -p "${PROJECT}-${kind}-${slug}" -f docker-compose.instance.yml \
+                --profile queue --profile sandbox stop 2>/dev/null || true
+        done
+    fi
+    log "stopping the base stack"
+    compose_all_profiles down --remove-orphans
+    audit "stack.down" ""
+}
+
+cmd_nuke() {
+    cat <<EOF
+This deletes, permanently:
+
+  data/db          the database and everything in it
+  data/cache       Redis persistence
+  data/storage     object storage
+  data/proxy       the local CA (browsers will need to trust the new one)
+  data/build-cache dependency caches (the next build re-downloads everything)
+
+It keeps: your code, your git worktrees, data/snapshots/, and the config
+database - which holds your configuration, the audit trail and the registry.
+EOF
+    echo
+    confirm "Really nuke stack '${STACK_NAME}'?" || exit 1
+
+    # A snapshot first, because "I meant dx down" is a thing that happens and the
+    # database is the only part of this that cannot be rebuilt.
+    if [ "$DB_ENGINE" != none ] && container_running "$DB_ENGINE"; then
+        log "taking a final snapshot before destroying the database"
+        db_snapshot "$DB_NAME" "auto-prenuke" || warn "final snapshot failed - continuing, as you asked"
+    fi
+
+    compose_all_profiles down -v --remove-orphans
+
+    # Delete through a container, not from the host.
+    #
+    # The app containers run as the invoking user, but MySQL, MinIO and Caddy run
+    # as root inside their official images - so data/db, data/storage and
+    # data/proxy end up owned by root on the host. A plain `rm -rf` here fails
+    # with fifty "Permission denied" lines and leaves the stack half-nuked, which
+    # is the worst of both outcomes.
+    log "removing runtime state"
+    docker run --rm -v "$(pwd)/data:/data" "$IMAGE_HELPER" sh -c \
+        'rm -rf /data/db /data/cache /data/storage /data/proxy /data/caddy-config /data/build-cache' \
+        || warn "could not remove some state - try: sudo rm -rf data/db data/storage data/proxy"
+    rm -f data/state/postcreate.* data/state/verify-*.since
+    audit "stack.nuke" ""
+    ok "nuked. 'dx up' rebuilds from nothing; snapshots survived in data/snapshots/"
+}
+
+cmd_ca_cert() {
+    local src=data/proxy/caddy/pki/authorities/local/root.crt
+    [ -f "$src" ] || die "no CA yet - start the stack first: dx up"
+    cp "$src" "data/state/${STACK_NAME}-local-ca.crt"
+    cat <<EOF
+Root certificate: $(pwd)/data/state/${STACK_NAME}-local-ca.crt
+
+Trust it once on whatever you browse from, then https://*.${STACK_DOMAIN} is
+green everywhere - including for tools that refuse to skip verification.
+
+  Linux    sudo cp <file> /usr/local/share/ca-certificates/${STACK_NAME}.crt
+           sudo update-ca-certificates
+  macOS    sudo security add-trusted-cert -d -r trustRoot \\
+             -k /Library/Keychains/System.keychain <file>
+  Firefox  Settings -> Privacy & Security -> Certificates -> View -> Authorities -> Import
+  Chrome   Settings -> Privacy -> Security -> Manage certificates -> Authorities -> Import
+
+Copy it off this machine with:
+  scp $(whoami)@$(hostname):$(pwd)/data/state/${STACK_NAME}-local-ca.crt .
+EOF
+}
+
+cmd_debug() {
+    case "${1:-status}" in
+        status)
+            echo "XDEBUG_MODE=${XDEBUG_MODE:-off}"
+            [ "${XDEBUG_MODE:-off}" = off ] \
+                && hint "dx debug on   (then listen on port 9003 in your editor)" ;;
+        on|off)
+            local mode; mode="$( [ "$1" = on ] && echo "${2:-debug,develop}" || echo off )"
+            # Written into .env rather than exported, because the setting has to
+            # survive the container recreate on the next line and every one after.
+            if grep -q '^XDEBUG_MODE=' .env 2>/dev/null; then
+                sed -i.bak "s/^XDEBUG_MODE=.*/XDEBUG_MODE=$mode/" .env
+            else
+                echo "XDEBUG_MODE=$mode" >> .env
+            fi
+            log "XDEBUG_MODE=$mode - recreating the app containers"
+            XDEBUG_MODE="$mode" compose up -d --force-recreate app
+            container_running queue && XDEBUG_MODE="$mode" compose --profile queue up -d --force-recreate queue
+            ok "xdebug $1"
+            [ "$1" = on ] && hint "your editor should listen on 9003; IDE key 'dx'" ;;
+        *) die "usage: dx debug [on|off|status]" ;;
+    esac
+}
+
+cmd_fix_perms() {
+    # Containers run as the invoking user. Anything an older root-running stack
+    # left behind is owned by root and the app cannot write over it - which
+    # presents as a permission error deep in the framework, nowhere near the
+    # cause.
+    local targets="storage bootstrap/cache var/cache var/log public/uploads node_modules .next"
+    log "repairing ownership under $APP_DIR"
+    docker run --rm -v "$APP_DIR:/app" "$IMAGE_HELPER" sh -c \
+        "cd /app && for t in $targets; do [ -e \"\$t\" ] && chown -R ${HOST_UID}:${HOST_GID} \"\$t\"; done; exit 0"
+
+    # And the stack's own caches. A root-owned /dx/cache stops every runtime
+    # dead - the python venv cannot be created, composer cannot write, npm
+    # cannot write - and the container then crash-loops saying only "restarting".
+    log "repairing ownership under data/"
+    docker run --rm -v "$(pwd)/data:/data" "$IMAGE_HELPER" sh -c \
+        "chown -R ${HOST_UID}:${HOST_GID} /data/build-cache /data/state /data/agent 2>/dev/null; exit 0"
+    ok "done"
+}
+
+cmd_browse() {
+    local url="${1:-https://${STACK_ROUTES_APP}.${STACK_DOMAIN}/}"
+    container_running browser || { log "starting the browser"; compose --profile browser up -d browser; sleep 3; }
+    docker exec -d "$(container browser)" sh -c \
+        "DISPLAY=:99 npx --yes playwright open --browser chromium '$url' 2>/dev/null || \
+         DISPLAY=:99 chromium --no-sandbox '$url'" 2>/dev/null || true
+    ok "opened $url"
+    echo "     watch it at https://vnc.${STACK_DOMAIN}/"
+}
+
+cmd_mcp_install() {
+    local cfg="${1:-$GIT_ROOT/.mcp.json}"
+    # ${HOME} rather than a relative path: Claude Code expands real environment
+    # variables in command/args but ignores `cwd`, and a relative path resolves
+    # against the user's home directory, not the project root. Getting this wrong
+    # is the single most common reason a project MCP server shows as "failed".
+    local py; py="$(command -v python3 || echo /usr/bin/python3)"
+    cat > "$cfg" <<EOF
+{
+  "mcpServers": {
+    "${STACK_NAME}-devstack": {
+      "command": "$py",
+      "args": ["${DX_ROOT}/mcp/server.py"],
+      "env": { "DX_ROOT": "${DX_ROOT}" }
+    }
+  }
+}
+EOF
+    ok "wrote $cfg"
+    hint "install the server's dependencies once:  pip install -r ${DX_ROOT}/mcp/requirements.txt"
+    hint "then restart Claude Code, or /mcp -> reconnect"
+}
+
+# ── dispatch ────────────────────────────────────────────────────────────────
+CMD="${1:-help}"; shift || true
+
+case "$CMD" in
+    up)                 cmd_up "$@" ;;
+    down|stop)          cmd_down ;;
+    nuke)               cmd_nuke ;;
+    restart)            cmd_down; cmd_up "$@" ;;
+    recreate)           [ $# -ge 1 ] || die "usage: dx recreate <service>"
+                        compose_all_profiles up -d --force-recreate "$@" ;;
+    build)              compose build "$@"; audit "stack.build" "$*" ;;
+
+    preflight|check)    cmd_preflight ;;
+    doctor)             cmd_doctor ;;
+    verify)             cmd_verify "${1:-main}" ;;
+    status|ps)          cmd_status ;;
+    urls)               cmd_urls ;;
+    describe|info)      cmd_describe ;;
+
+    logs)               compose_all_profiles logs --tail "$(_cfg OUTPUT_LOG_TAIL)" "$@" ;;
+    # Interactive, so a login shell is right here: this is the one place a
+    # profile banner and aliases are wanted. Non-interactive execution must not
+    # use one - see run_hooks.
+    sh|shell)           require_running "${1:-app}"; dexec "$(container "${1:-app}")" sh -l ;;
+    exec)               [ $# -ge 2 ] || die "usage: dx exec <service> <cmd...>"
+                        local_svc="$1"; shift; rt_exec "$local_svc" "$*" ;;
+    run)                [ $# -ge 1 ] || die "usage: dx run <cmd...>"
+                        rt_exec app "$*" ;;
+
+    deps)               rt_deps_install ;;
+    test)               rt_test "$@" ;;
+    lint|fmt)           rt_lint "$@" ;;
+    repl|tinker|shell:app) rt_repl ;;
+
+    db)                 db_shell ;;
+    db:query)           [ $# -ge 1 ] || die "usage: dx db:query <sql>"; db_require; db_sql "$*" ;;
+    db:migrate)         rt_migrate ;;
+    db:snapshot)        db_snapshot "${1:-$DB_NAME}" "${2:-manual}" ;;
+    db:snapshots)       db_snapshots_list ;;
+    db:restore)         [ $# -ge 1 ] || die "usage: dx db:restore <file> [database]"; db_restore "$@" ;;
+    db:import)          [ $# -ge 1 ] || die "usage: dx db:import <file.sql[.gz]>"; db_import "$@" ;;
+    db:drop)            [ $# -ge 1 ] || die "usage: dx db:drop <database>"; db_drop_database "$@" ;;
+
+    wt|worktree)        wt_dispatch "$@" ;;
+    agent)              agent_dispatch "$@" ;;
+
+    browse|open)        cmd_browse "$@" ;;
+    ca-cert)            cmd_ca_cert ;;
+    debug)              cmd_debug "$@" ;;
+    fix-perms)          cmd_fix_perms ;;
+    mcp:install)        cmd_mcp_install "$@" ;;
+    audit)              agent_audit "$@" ;;
+    policy)             policy_show ;;
+
+    config)             config_dispatch "$@" ;;
+    selftest)           exec "$DX_ROOT/tests/run" "$@" ;;
+    completion)         exec "$DX_ROOT/lib/completion.sh" "${1:-bash}" ;;
+    help|-h|--help)     usage ;;
+
+    *)
+        # Unrecognised verbs go to the runtime module before failing, which is
+        # what makes `dx artisan`, `dx npm` and `dx go` work without dx knowing
+        # any of them exist.
+        if rt_dispatch "$CMD" "$@"; then exit 0; fi
+        echo "Unknown command '$CMD'." >&2
+        echo >&2
+        usage >&2
+        exit 1
+        ;;
+esac

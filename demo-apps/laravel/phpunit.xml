@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Note what is NOT here: an <env name="DB_DATABASE"> block.
+
+  A suite that names its own database is a suite that truncates whatever that
+  name points at, and the usual failure is that the override is commented out
+  and nobody notices until the development data is gone. dx sets DB_DATABASE to
+  a disposable name in the environment before invoking the runner, and refuses
+  to run at all if the name it computed does not look disposable.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php" colors="true">
+  <testsuites>
+    <testsuite name="Feature">
+      <directory>tests/Feature</directory>
+    </testsuite>
+  </testsuites>
+  <source>
+    <include><directory>app</directory></include>
+  </source>
+</phpunit>

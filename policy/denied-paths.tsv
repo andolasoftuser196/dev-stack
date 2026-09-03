@@ -1,0 +1,48 @@
+# Paths a change may touch and still be correct - but not unattended.
+# Format:  <glob><TAB><reason>
+#
+# The reason column is not decoration. A bare list of globs invites the next
+# person to "just add one" without understanding why the others are there, and
+# the reason is what 'dx agent diff' prints and what the audit log records when
+# a change is held back.
+#
+# Globs: '**' matches across directory separators. Paths are repo-root-relative,
+# which is what `git diff --name-only` produces and what a human reading the
+# output will recognise.
+#
+# This ships as a starting set. Every project should add its own tenancy
+# boundary, its own billing surface, and its own "one line here reaches every
+# request" files - those are the ones a plausible-looking change is most
+# dangerous in, and only you know where yours are.
+
+**/.env	environment configuration; a change here alters every connection the app makes
+**/.env.*	environment configuration
+**/composer.json	dependency changes need review
+**/composer.lock	a lockfile change can silently re-resolve a pinned package
+**/package.json	dependency changes need review
+**/package-lock.json	a lockfile change can silently re-resolve a pinned package
+**/pnpm-lock.yaml	a lockfile change can silently re-resolve a pinned package
+**/yarn.lock	a lockfile change can silently re-resolve a pinned package
+**/go.sum	module checksums; a change here is a supply-chain change
+**/uv.lock	a lockfile change can silently re-resolve a pinned package
+**/poetry.lock	a lockfile change can silently re-resolve a pinned package
+**/migrations/**	schema changes need eyes
+**/Migrations/**	schema changes need eyes
+**/database/migrations/**	schema changes need eyes
+**/phpunit.xml	the suite's own configuration decides what runs and how
+**/pytest.ini	the suite's own configuration decides what runs and how
+**/jest.config.*	the suite's own configuration decides what runs and how
+**/vitest.config.*	the suite's own configuration decides what runs and how
+**/tests/TestCase.php	the base test case; a change here reaches every test
+**/conftest.py	shared test fixtures; a change here reaches every test
+**/*-baseline.json	records which tests already fail; editing it lets a change hide the failures it caused
+**/*-baseline.neon	records which static-analysis errors already exist; same reasoning
+.github/workflows/**	no self-modification of the checks that gate this
+.gitlab-ci.yml	no self-modification of the checks that gate this
+**/Dockerfile	the image every environment runs on
+**/docker-compose*.yml	the environment definition itself
+dev-stack/**	the dev stack is the agent's own tooling; it does not get to change it
+routes/**	route changes alter the app's public surface
+config/**	application configuration reaches every request
+**/middleware/**	middleware runs on every request
+**/Middleware/**	middleware runs on every request

@@ -1,0 +1,78 @@
+# NestJS, running start:dev.
+#
+# queue and scheduler are on because a Nest API usually has BullMQ processors and
+# @nestjs/schedule jobs. They run 'npm run queue' and 'npm run schedule' - add
+# those scripts, or point them elsewhere:
+#     dx config set runtime.queue_cmd 'node dist/worker'
+#
+# repo.root already points at the matching demo application, so this runs as-is
+# from a fresh clone:
+#
+#     cp examples/runtimes/node-nest.stack.yml config/stack.yml
+#     dx config import && dx up core && dx urls
+#
+# For a real project, change repo.root and repo.git_root to point at it.
+
+name: nest-api
+domain: nest-api.test
+
+repo:
+  root: demo-apps/nest
+  git_root: .
+  worktree_root: data/worktrees
+
+runtime:
+  kind: node
+  version: "22"
+  framework: nest
+  docroot: public
+  port: 80
+  app_port: 3000
+  healthz: /healthz
+  packages: []
+
+services:
+  database: postgres
+  cache: redis
+  mail: mailpit
+  storage: minio
+  search: none
+  queue: true
+  scheduler: true
+  vector: none
+
+database:
+  name: nest_api_dev
+  user: nest_api
+  password: nest_api
+  version: "16"
+
+routes:
+  app: app
+  optional: [mail, db, cache, s3, minio, vnc, mcp]
+
+tools:
+  db_ui: true
+  cache_ui: true
+  browser: true
+  mcp: true
+
+hooks:
+  # Dependencies are not listed here. `dx up` installs them through the runtime
+  # module, which knows the right command for the package manager in use and
+  # what to do when there is no lockfile yet. Put project-specific one-time
+  # setup here instead.
+  postCreate: []
+  # No migration hook: the demo app has no schema. A real Prisma project adds:
+  #   postStart: ["npx prisma migrate deploy"]
+  postStart: []
+  preDown: []
+  postInstance: []
+
+agents:
+  max_concurrent: 4
+  cpus: "2.0"
+  memory: "4g"
+  pids_limit: 512
+  lease_ttl: "4h"
+  egress: allowlist

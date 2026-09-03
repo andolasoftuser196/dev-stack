@@ -1,0 +1,83 @@
+# Django with Celery.
+#
+# Caddy serves /static itself rather than letting Django do it in DEBUG. The dev
+# server is single-threaded enough without also shipping assets, and a slow page
+# is then unambiguously the app's fault.
+#
+# DJANGO_SETTINGS_MODULE defaults to config.settings:
+#     dx config set runtime.settings_module myproject.settings.dev
+#
+# `dx test` runs pytest against <db>_test. Django's own runner would add its own
+# test_ prefix on top of that; pytest-django keeps one disposable name.
+#
+# repo.root already points at the matching demo application, so this runs as-is
+# from a fresh clone:
+#
+#     cp examples/runtimes/python-django.stack.yml config/stack.yml
+#     dx config import && dx up core && dx urls
+#
+# For a real project, change repo.root and repo.git_root to point at it.
+
+name: django-app
+domain: django-app.test
+
+repo:
+  root: demo-apps/django
+  git_root: .
+  worktree_root: data/worktrees
+
+runtime:
+  kind: python
+  version: "3.12"
+  framework: django
+  docroot: static
+  port: 80
+  app_port: 8000
+  healthz: /healthz
+  packages: []
+
+services:
+  database: postgres
+  cache: redis
+  mail: mailpit
+  storage: minio
+  search: none
+  queue: true
+  scheduler: true
+  vector: none
+
+database:
+  name: django_app_dev
+  user: django_app
+  password: django_app
+  version: "16"
+
+routes:
+  app: app
+  optional: [mail, db, cache, s3, minio, vnc, mcp]
+
+tools:
+  db_ui: true
+  cache_ui: true
+  browser: true
+  mcp: true
+
+hooks:
+  # Dependencies are not listed here. `dx up` installs them through the runtime
+  # module, which knows the right command for the package manager in use and
+  # what to do when there is no lockfile yet. Put project-specific one-time
+  # setup here instead.
+  postCreate: []
+  postStart:
+    - "python manage.py migrate --noinput"
+  preDown: []
+  postInstance:
+    - "python manage.py migrate --noinput"
+
+agents:
+  max_concurrent: 4
+  cpus: "2.0"
+  memory: "4g"
+  pids_limit: 512
+  lease_ttl: "4h"
+  egress: allowlist

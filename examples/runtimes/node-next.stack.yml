@@ -1,0 +1,81 @@
+# Next.js.
+#
+# Caddy fronts the Next dev server and answers /healthz itself, so a build error
+# does not take the container down - you keep the logs and the container that
+# produced them.
+#
+# HMR needs unbuffered responses. The proxy sets flush_interval -1 on every
+# route, so it works untouched; if you hand-add a route and HMR appears to hang,
+# that is the missing line.
+#
+# repo.root already points at the matching demo application, so this runs as-is
+# from a fresh clone:
+#
+#     cp examples/runtimes/node-next.stack.yml config/stack.yml
+#     dx config import && dx up core && dx urls
+#
+# For a real project, change repo.root and repo.git_root to point at it.
+
+name: next-app
+domain: next-app.test
+
+repo:
+  root: demo-apps/next
+  git_root: .
+  worktree_root: data/worktrees
+
+runtime:
+  kind: node
+  version: "22"
+  framework: next
+  docroot: public
+  port: 80
+  app_port: 3000
+  healthz: /healthz
+  packages: []
+
+services:
+  database: postgres
+  cache: redis
+  mail: mailpit
+  storage: minio
+  search: none
+  queue: false
+  scheduler: false
+  vector: none
+
+database:
+  name: next_app_dev
+  user: next_app
+  password: next_app
+  version: "16"
+
+routes:
+  app: app
+  optional: [mail, db, cache, s3, minio, vnc, mcp]
+
+tools:
+  db_ui: true
+  cache_ui: true
+  browser: true
+  mcp: true
+
+hooks:
+  # Dependencies are not listed here. `dx up` installs them through the runtime
+  # module, which knows the right command for the package manager in use and
+  # what to do when there is no lockfile yet. Put project-specific one-time
+  # setup here instead.
+  postCreate: []
+  # No migration hook: the demo app has no schema. A real Prisma project adds:
+  #   postStart: ["npx prisma migrate deploy"]
+  postStart: []
+  preDown: []
+  postInstance: []
+
+agents:
+  max_concurrent: 4
+  cpus: "2.0"
+  memory: "4g"
+  pids_limit: 512
+  lease_ttl: "4h"
+  egress: allowlist

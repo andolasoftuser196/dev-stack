@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# tests/run - the test runner.
+#
+#   tests/run                 unit + python  (fast, no docker daemon needed)
+#   tests/run --integration   also the end-to-end tier (slow, real containers)
+#   tests/run --all
+#   tests/run unit/test_yaml  one file
+#
+# Exit status is the thing CI reads: zero only when every assertion passed.
+set -uo pipefail
+cd "$(dirname "$(readlink -f "$0")")/.."
+
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    G=$'\033[32m'; R=$'\033[31m'; Y=$'\033[33m'; B=$'\033[1m'; D=$'\033[2m'; O=$'\033[0m'
+else G=''; R=''; Y=''; B=''; D=''; O=''; fi
+
+WANT_UNIT=1; WANT_PY=1; WANT_INT=0; ONLY=""
+for a in "$@"; do
+    case "$a" in
+        --integration) WANT_INT=1 ;;
+        --all)         WANT_INT=1 ;;
+        --unit)        WANT_PY=0 ;;
+        --python)      WANT_UNIT=0 ;;
+        -h|--help)     sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -*)            echo "unknown flag $a" >&2; exit 2 ;;
+        *)             ONLY="$a"; WANT_INT=1 ;;
+    esac
+done
+
+PASS=0; FAIL=0; SKIP=0; FILES=0; FAILED_FILES=""
+
+run_shell() {
+    local f="$1" out s
+    FILES=$((FILES+1))
+    printf '%s%s%s\n' "$B" "$f" "$O"
+    out="$("$f" 2>&1)"
+    printf '%s\n' "$out" | grep -vE '^#SUMMARY|^\[dx\] (creating|first run)'
+    s="$(printf '%s' "$out" | grep '^#SUMMARY' | tail -1)"
+    if [ -z "$s" ]; then
+        printf '  %sthe file did not finish - no summary line%s\n' "$R" "$O"
+        FAIL=$((FAIL+1)); FAILED_FILES="$FAILED_FILES $f"; return
+    fi
+    set -- $s
+    PASS=$((PASS+$2)); FAIL=$((FAIL+$3)); SKIP=$((SKIP+$4))
+    [ "$3" -eq 0 ] || FAILED_FILES="$FAILED_FILES $f"
+}
+
+# unittest reports on stderr in its own format; translate it into our tally.
+run_python() {
+    local f="$1" out n fails errs
+    FILES=$((FILES+1))
+    printf '%s%s%s\n' "$B" "$f" "$O"
+    out="$(python3 "$f" 2>&1)"
+    n="$(printf '%s' "$out" | grep -oE '^Ran [0-9]+ test' | grep -oE '[0-9]+' | tail -1)"
+    fails="$(printf '%s' "$out" | grep -oE 'failures=[0-9]+' | grep -oE '[0-9]+' | tail -1)"
+    errs="$(printf '%s' "$out"  | grep -oE 'errors=[0-9]+'   | grep -oE '[0-9]+' | tail -1)"
+    n="${n:-0}"; fails="${fails:-0}"; errs="${errs:-0}"
+    local bad=$((fails + errs))
+    if [ "$bad" -gt 0 ]; then
+        printf '%s\n' "$out" | sed -n '/^====/,$p' | head -50 | sed 's/^/  /'
+        FAILED_FILES="$FAILED_FILES $f"
+    fi
+    printf '  %s%d passed%s%s\n' "$G" "$((n - bad))" "$O" \
+        "$( [ "$bad" -gt 0 ] && printf ', %s%d failed%s' "$R" "$bad" "$O" )"
+    PASS=$((PASS + n - bad)); FAIL=$((FAIL + bad))
+}
+
+start="$(date +%s)"
+
+if [ -n "$ONLY" ]; then
+    for cand in "tests/$ONLY" "tests/$ONLY.sh" "tests/$ONLY.py" "$ONLY"; do
+        if [ -f "$cand" ]; then
+            case "$cand" in *.py) run_python "$cand" ;; *) run_shell "$cand" ;; esac
+            found=1; break
+        fi
+    done
+    [ "${found:-0}" = 1 ] || { echo "no such test: $ONLY" >&2; exit 2; }
+else
+    if [ "$WANT_UNIT" = 1 ]; then
+        printf '%s══ unit ══%s\n' "$D" "$O"
+        for f in tests/unit/*.sh; do run_shell "$f"; done
+    fi
+    if [ "$WANT_PY" = 1 ]; then
+        printf '\n%s══ python ══%s\n' "$D" "$O"
+        for f in tests/python/*.py; do run_python "$f"; done
+    fi
+    if [ "$WANT_INT" = 1 ]; then
+        printf '\n%s══ integration ══%s\n' "$D" "$O"
+        for f in tests/integration/*.sh; do run_shell "$f"; done
+    else
+        printf '\n%sintegration tier skipped - tests/run --integration to include it%s\n' "$D" "$O"
+    fi
+fi
+
+printf '\n%s%s%s\n' "$B" "────────────────────────────────────────" "$O"
+printf '%d file(s), %s%d passed%s' "$FILES" "$G" "$PASS" "$O"
+[ "$FAIL" -gt 0 ] && printf ', %s%d failed%s' "$R" "$FAIL" "$O"
+[ "$SKIP" -gt 0 ] && printf ', %s%d skipped%s' "$Y" "$SKIP" "$O"
+printf '  %s(%ss)%s\n' "$D" "$(( $(date +%s) - start ))" "$O"
+
+if [ "$FAIL" -gt 0 ]; then
+    printf '\nfailing:%s\n' "$FAILED_FILES"
+    exit 1
+fi
+exit 0
